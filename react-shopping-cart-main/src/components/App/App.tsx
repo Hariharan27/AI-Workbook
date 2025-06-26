@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import Loader from 'components/Loader';
+import ErrorMessage from 'components/ErrorMessage';
 import { GithubCorner, GithubStarButton } from 'components/Github';
 import Recruiter from 'components/Recruiter';
 import Filter from 'components/Filter';
@@ -12,7 +13,7 @@ import { useProducts } from 'contexts/products-context';
 import * as S from './style';
 
 function App() {
-  const { isFetching, products, fetchProducts } = useProducts();
+  const { isFetching, products, error, fetchProducts } = useProducts();
 
   useEffect(() => {
     fetchProducts();
@@ -30,9 +31,17 @@ function App() {
         </S.Side>
         <S.Main>
           <S.MainHeader>
-            <p>{products?.length} Product(s) found</p>
+            <p>{products?.length || 0} Product(s) found</p>
           </S.MainHeader>
-          <Products products={products} />
+          {error ? (
+            <ErrorMessage
+              title="Failed to Load Products"
+              message={error}
+              onRetry={fetchProducts}
+            />
+          ) : (
+            <Products products={products} />
+          )}
         </S.Main>
       </S.TwoColumnGrid>
       <Cart />

@@ -15,12 +15,14 @@ describe('[contexts] - products-context', () => {
     let isFetching: boolean;
     let products: ICartProduct[];
     let filters: string[];
+    let error: string | null;
     const originalUseContext = React.useContext;
 
     const setupMockUseContext = (options: { [key: string]: any } = {}) => {
       isFetching = false;
       products = options.initialProducts || [];
       filters = options.initialFilters || [];
+      error = options.initialError || null;
 
       const mockSetIsFetching = jest.fn().mockImplementation((newState) => {
         isFetching = newState;
@@ -38,6 +40,11 @@ describe('[contexts] - products-context', () => {
         return filters;
       });
 
+      const mockSetError = jest.fn().mockImplementation((errorMessage) => {
+        error = errorMessage;
+        return error;
+      });
+
       const mockUseContext = jest.fn().mockImplementation(() => ({
         isFetching: false,
         setIsFetching: mockSetIsFetching,
@@ -45,6 +52,8 @@ describe('[contexts] - products-context', () => {
         setProducts: mockSetProducts,
         filters: options.initialFilters,
         setFilters: mockSetFilters,
+        error: options.initialError || null,
+        setError: mockSetError,
       }));
       React.useContext = mockUseContext;
     };

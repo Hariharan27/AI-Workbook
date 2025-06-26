@@ -12,6 +12,8 @@ const useProducts = () => {
     setProducts,
     filters,
     setFilters,
+    error,
+    setError,
   } = useProductsContext();
 
   // Use ref to track the latest request to prevent race conditions
@@ -27,18 +29,22 @@ const useProducts = () => {
     abortControllerRef.current = new AbortController();
     
     setIsFetching(true);
+    setError(null); // Clear any previous errors
+    
     try {
       const products: IProduct[] = await getProducts();
       // Only update state if this request hasn't been cancelled
       if (!abortControllerRef.current.signal.aborted) {
         setProducts(products);
+        setError(null);
       }
     } catch (error) {
       // Only handle errors if the request wasn't cancelled
       if (!abortControllerRef.current.signal.aborted) {
         console.error('Failed to fetch products:', error);
-        // Set empty array to prevent undefined state
-        setProducts([]);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to load products';
+        setError(errorMessage);
+        setProducts([]); // Set empty array to prevent undefined state
       }
     } finally {
       // Only update loading state if this request hasn't been cancelled
@@ -46,7 +52,7 @@ const useProducts = () => {
         setIsFetching(false);
       }
     }
-  }, [setIsFetching, setProducts]);
+  }, [setIsFetching, setProducts, setError]);
 
   const filterProducts = useCallback(async (newFilters: string[]) => {
     // Cancel any ongoing request
@@ -58,6 +64,7 @@ const useProducts = () => {
     abortControllerRef.current = new AbortController();
 
     setIsFetching(true);
+    setError(null); // Clear any previous errors
 
     try {
       const allProducts: IProduct[] = await getProducts();
@@ -78,11 +85,14 @@ const useProducts = () => {
 
         setFilters(newFilters);
         setProducts(filteredProducts);
+        setError(null);
       }
     } catch (error) {
       // Only handle errors if the request wasn't cancelled
       if (!abortControllerRef.current.signal.aborted) {
         console.error('Failed to filter products:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Failed to filter products';
+        setError(errorMessage);
         setProducts([]);
       }
     } finally {
@@ -91,7 +101,7 @@ const useProducts = () => {
         setIsFetching(false);
       }
     }
-  }, [setIsFetching, setProducts, setFilters]);
+  }, [setIsFetching, setProducts, setFilters, setError]);
 
   return {
     isFetching,
@@ -99,6 +109,7 @@ const useProducts = () => {
     products,
     filterProducts,
     filters,
+    error,
   };
 };
 

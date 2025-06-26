@@ -10,20 +10,26 @@ import GlobalStyle from 'commons/style/global-style';
 import { ProductsProvider } from 'contexts/products-context';
 import { CartProvider } from 'contexts/cart-context';
 
+/* Components */
 import App from 'components/App';
+import ErrorBoundary from 'components/ErrorBoundary';
 
 const root = document.getElementById('root')!;
 const container = ReactDOMClient.createRoot(root);
 
 container.render(
   <StrictMode>
-    <ThemeProvider theme={theme}>
-      <GlobalStyle />
-      <ProductsProvider>
-        <CartProvider>
-          <App />
-        </CartProvider>
-      </ProductsProvider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider theme={theme}>
+        <GlobalStyle />
+        <ErrorBoundary>
+          <ProductsProvider>
+            <CartProvider>
+              <App />
+            </CartProvider>
+          </ProductsProvider>
+        </ErrorBoundary>
+      </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>
 );
