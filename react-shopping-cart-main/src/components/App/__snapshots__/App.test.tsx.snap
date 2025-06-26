@@ -76,11 +76,25 @@ Object {
             </p>
           </div>
         </div>
+        <nav
+          class="App__Navigation-sc-ebmerl-1 jKKzpv"
+        >
+          <button
+            class="App__NavButton-sc-ebmerl-2 iVTqSa"
+          >
+            🛒 Shopping Cart
+          </button>
+          <button
+            class="App__NavButton-sc-ebmerl-2 hZXblb"
+          >
+            🔓 User Profile (Vulnerable)
+          </button>
+        </nav>
         <main
-          class="App__TwoColumnGrid-sc-ebmerl-1 hularM"
+          class="App__TwoColumnGrid-sc-ebmerl-3 eAgBzu"
         >
           <div
-            class="App__Side-sc-ebmerl-2 dnqiC"
+            class="App__Side-sc-ebmerl-4 gYDJvg"
           >
             <div
               class="Filter__Container-sc-bj2vay-0"
@@ -225,10 +239,10 @@ Object {
             </div>
           </div>
           <main
-            class="App__Main-sc-ebmerl-3"
+            class="App__Main-sc-ebmerl-5"
           >
             <main
-              class="App__MainHeader-sc-ebmerl-4 jvDqsc"
+              class="App__MainHeader-sc-ebmerl-6 eSzSne"
             >
               <p>
                 0
@@ -348,11 +362,25 @@ Object {
           </p>
         </div>
       </div>
+      <nav
+        class="App__Navigation-sc-ebmerl-1 jKKzpv"
+      >
+        <button
+          class="App__NavButton-sc-ebmerl-2 iVTqSa"
+        >
+          🛒 Shopping Cart
+        </button>
+        <button
+          class="App__NavButton-sc-ebmerl-2 hZXblb"
+        >
+          🔓 User Profile (Vulnerable)
+        </button>
+      </nav>
       <main
-        class="App__TwoColumnGrid-sc-ebmerl-1 hularM"
+        class="App__TwoColumnGrid-sc-ebmerl-3 eAgBzu"
       >
         <div
-          class="App__Side-sc-ebmerl-2 dnqiC"
+          class="App__Side-sc-ebmerl-4 gYDJvg"
         >
           <div
             class="Filter__Container-sc-bj2vay-0"
@@ -497,10 +525,10 @@ Object {
           </div>
         </div>
         <main
-          class="App__Main-sc-ebmerl-3"
+          class="App__Main-sc-ebmerl-5"
         >
           <main
-            class="App__MainHeader-sc-ebmerl-4 jvDqsc"
+            class="App__MainHeader-sc-ebmerl-6 eSzSne"
           >
             <p>
               0
