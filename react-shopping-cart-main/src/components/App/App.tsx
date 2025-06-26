@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 import Loader from 'components/Loader';
 import ErrorMessage from 'components/ErrorMessage';
 import { GithubCorner, GithubStarButton } from 'components/Github';
-import Recruiter from 'components/Recruiter';
 import Filter from 'components/Filter';
 import Products from 'components/Products';
 import Cart from 'components/Cart';
@@ -55,7 +54,6 @@ function App() {
     <S.Container>
       {isFetching && <Loader />}
       <GithubCorner />
-      <Recruiter />
       
       <S.Navigation>
         <S.NavButton 
