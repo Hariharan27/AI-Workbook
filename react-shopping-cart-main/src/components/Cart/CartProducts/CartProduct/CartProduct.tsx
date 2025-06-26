@@ -1,3 +1,4 @@
+import React, { useCallback, useMemo } from 'react';
 import formatPrice from 'utils/formatPrice';
 import { ICartProduct } from 'models';
 
@@ -8,7 +9,8 @@ import * as S from './style';
 interface IProps {
   product: ICartProduct;
 }
-const CartProduct = ({ product }: IProps) => {
+
+const CartProduct = React.memo(({ product }: IProps) => {
   const { removeProduct, increaseProductQuantity, decreaseProductQuantity } =
     useCart();
   const {
@@ -22,9 +24,27 @@ const CartProduct = ({ product }: IProps) => {
     quantity,
   } = product;
 
-  const handleRemoveProduct = () => removeProduct(product);
-  const handleIncreaseProductQuantity = () => increaseProductQuantity(product);
-  const handleDecreaseProductQuantity = () => decreaseProductQuantity(product);
+  // Memoize event handlers
+  const handleRemoveProduct = useCallback(() => {
+    removeProduct(product);
+  }, [removeProduct, product]);
+
+  const handleIncreaseProductQuantity = useCallback(() => {
+    increaseProductQuantity(product);
+  }, [increaseProductQuantity, product]);
+
+  const handleDecreaseProductQuantity = useCallback(() => {
+    decreaseProductQuantity(product);
+  }, [decreaseProductQuantity, product]);
+
+  // Memoize expensive calculations
+  const formattedPrice = useMemo(() => {
+    return formatPrice(price, currencyId);
+  }, [price, currencyId]);
+
+  const productDescription = useMemo(() => {
+    return `${availableSizes[0]} | ${style}`;
+  }, [availableSizes, style]);
 
   return (
     <S.Container>
@@ -39,12 +59,12 @@ const CartProduct = ({ product }: IProps) => {
       <S.Details>
         <S.Title>{title}</S.Title>
         <S.Desc>
-          {`${availableSizes[0]} | ${style}`} <br />
+          {productDescription} <br />
           Quantity: {quantity}
         </S.Desc>
       </S.Details>
       <S.Price>
-        <p>{`${currencyFormat}  ${formatPrice(price, currencyId)}`}</p>
+        <p>{`${currencyFormat}  ${formattedPrice}`}</p>
         <div>
           <S.ChangeQuantity
             onClick={handleDecreaseProductQuantity}
@@ -59,6 +79,8 @@ const CartProduct = ({ product }: IProps) => {
       </S.Price>
     </S.Container>
   );
-};
+});
+
+CartProduct.displayName = 'CartProduct';
 
 export default CartProduct;

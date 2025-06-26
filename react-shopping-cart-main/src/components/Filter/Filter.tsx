@@ -1,38 +1,45 @@
+import React, { useMemo, useCallback } from 'react';
 import { useProducts } from 'contexts/products-context';
 
 import * as S from './style';
 
 export const availableSizes = ['XS', 'S', 'M', 'ML', 'L', 'XL', 'XXL'];
 
-const Filter = () => {
+const Filter = React.memo(() => {
   const { filters, filterProducts } = useProducts();
 
-  const selectedCheckboxes = new Set(filters);
-
-  const toggleCheckbox = (label: string) => {
+  const toggleCheckbox = useCallback((label: string) => {
+    const selectedCheckboxes = new Set(filters);
+    
     if (selectedCheckboxes.has(label)) {
       selectedCheckboxes.delete(label);
     } else {
       selectedCheckboxes.add(label);
     }
 
-    const filters = Array.from(selectedCheckboxes) as [];
+    const newFilters = Array.from(selectedCheckboxes);
+    filterProducts(newFilters);
+  }, [filters, filterProducts]);
 
-    filterProducts(filters);
-  };
-
-  const createCheckbox = (label: string) => (
-    <S.Checkbox label={label} handleOnChange={toggleCheckbox} key={label} />
-  );
-
-  const createCheckboxes = () => availableSizes.map(createCheckbox);
+  // Memoize checkbox creation
+  const checkboxes = useMemo(() => {
+    return availableSizes.map((label: string) => (
+      <S.Checkbox 
+        label={label} 
+        handleOnChange={toggleCheckbox} 
+        key={label} 
+      />
+    ));
+  }, [toggleCheckbox]);
 
   return (
     <S.Container>
       <S.Title>Sizes:</S.Title>
-      {createCheckboxes()}
+      {checkboxes}
     </S.Container>
   );
-};
+});
+
+Filter.displayName = 'Filter';
 
 export default Filter;
