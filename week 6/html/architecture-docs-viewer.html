@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Architecture Docs Viewer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f6fb;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+            padding: 32px 40px 40px 40px;
+        }
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 32px;
+        }
+        .dropdown {
+            display: flex;
+            align-items: center;
+            margin-bottom: 24px;
+        }
+        label {
+            font-weight: 500;
+            margin-right: 12px;
+            color: #333;
+        }
+        select {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 1em;
+        }
+        #md-content {
+            margin-top: 32px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 24px;
+            min-height: 300px;
+            font-size: 1.08em;
+            color: #222;
+        }
+        pre, code {
+            background: #2d3748;
+            color: #e2e8f0;
+            border-radius: 4px;
+            padding: 2px 6px;
+        }
+        pre {
+            padding: 12px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 Architecture Docs Viewer</h1>
+        <div class="dropdown">
+            <label for="md-select">Select a document:</label>
+            <select id="md-select">
+                <option value="">-- Choose a file --</option>
+                <option value="mongodb-schemas.md">MongoDB Schemas</option>
+                <option value="express-routes.md">Express Routes</option>
+                <option value="socketio-architecture.md">Socket.io Architecture</option>
+                <option value="graphql-schema.md">GraphQL Schema</option>
+                <option value="redis-caching.md">Redis Caching</option>
+                <option value="architecture-design.md">Architecture Design</option>
+            </select>
+        </div>
+        <div id="md-content">Please select a document to view its content.</div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        const select = document.getElementById('md-select');
+        const content = document.getElementById('md-content');
+        select.addEventListener('change', function() {
+            const file = select.value;
+            if (!file) {
+                content.innerHTML = 'Please select a document to view its content.';
+                return;
+            }
+            fetch('./docs/' + file)
+                .then(res => {
+                    if (!res.ok) throw new Error('File not found');
+                    return res.text();
+                })
+                .then(md => {
+                    content.innerHTML = marked.parse(md);
+                })
+                .catch(() => {
+                    content.innerHTML = '<span style="color:red">Failed to load the selected file.<br>Check file permissions or path.</span>';
+                });
+        });
+    </script>
+</body>
+</html> 

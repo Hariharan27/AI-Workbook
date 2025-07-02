@@ -1,0 +1,110 @@
+
+Node.js – AI-Powered Social Media Platform
+
+Base Repository: MEAN Stack Template
+Repository Structure:
+mean/
+├── modules/
+│   ├── core/
+│   ├── users/
+│   └── articles/
+├── config/
+├── public/
+├── package.json
+└── docker-compose.yml
+
+Base Repository:
+https://github.com/linnovate/mean
+
+Phase 1: Architecture Design
+
+AI Prompt for Node.js:
+Design a scalable social media platform architecture:
+
+Features:
+- User profiles with social connections
+- Post creation with media attachments
+- Real-time feed updates and notifications
+- Messaging system with chat rooms
+- Content moderation and recommendation engine
+
+Technical Stack:
+- Node.js with Express.js and TypeScript
+- MongoDB with Mongoose ODM
+- Redis for caching and session management
+- Socket.io for real-time features
+- AWS S3 for media storage
+- GraphQL for flexible data fetching
+
+Generate:
+1. MongoDB schema design with relationships
+2. Express.js route structure
+3. Socket.io event architecture
+4. GraphQL schema and resolvers
+5. Caching strategy with Redis
+
+Phase 2: Core Implementation
+
+Task 1: User Management & Social Features
+
+AI Prompt:
+Create a comprehensive user and social system:
+
+User Features:
+- User registration and authentication with JWT
+- Profile management with avatar uploads
+- Friend requests and connections
+- User privacy settings and blocking
+- Activity feed and user recommendations
+
+Technical Implementation:
+- Mongoose schemas for users and relationships
+- Express middleware for authentication
+- File upload handling with multer
+- Social graph algorithms for recommendations
+- Privacy controls and data filtering
+- Input validation and sanitization
+
+Task 2: Post & Content Management (30 minutes)
+
+AI Prompt:
+Implement post creation and content management:
+
+Features:
+- Text posts with rich formatting
+- Image and video uploads
+- Post reactions (likes, comments, shares)
+- Content moderation and filtering
+- Hashtag and mention system
+
+Include:
+- MongoDB aggregation pipelines for feeds
+- Image processing and optimization
+- Real-time updates with Socket.io
+- Content recommendation algorithms
+- Search functionality with text indexing
+
+Task 3: Real-time Messaging
+
+AI Prompt:
+Build real-time messaging and notification system:
+
+Messaging Features:
+- Private messaging between users
+- Group chat rooms
+- Message delivery status
+- Typing indicators and read receipts
+- Push notifications
+
+Implementation:
+- Socket.io rooms and namespaces
+- Message persistence in MongoDB
+- Real-time notification delivery
+- Connection state management
+- Message encryption for privacy
+
+Phase 3: Performance & Scaling (60 minutes)
+- GraphQL implementation with Apollo Server
+- Redis caching for feeds and sessions
+- Rate limiting and API protection
+- Performance monitoring with New Relic
