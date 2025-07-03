@@ -1,6 +1,6 @@
 # IdeatorPechu - Social Media Platform
 
-A scalable social media platform with Tamil cultural integration, built with the MEAN stack (MongoDB, Express.js, Angular/React, Node.js).
+A scalable social media platform with Tamil cultural integration, built with the MERN stack (MongoDB, Express.js, React, Node.js).
 
 ## 🎯 Current Phase: 2A - User Management & Authentication
 

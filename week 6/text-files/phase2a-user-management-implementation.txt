@@ -1,8 +1,8 @@
-IDEATORPECHU - PHASE 2A IMPLEMENTATION PLAN
-============================================
+IDEATORPECHU - PHASE 2A IMPLEMENTATION PLAN (MERN STACK)
+========================================================
 
-Phase 2A: User Management & Authentication
-==========================================
+Phase 2A: User Management & Authentication (MongoDB, Express, React, Node.js)
+============================================================================
 
 🎯 Phase 2A Overview
 --------------------

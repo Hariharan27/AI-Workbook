@@ -5,6 +5,7 @@ Scalable social media platform with real-time features, content management, and 
 
 ## Technical Stack
 - **Backend**: Node.js with Express.js and TypeScript
+- **Frontend**: React.js with TypeScript
 - **Database**: MongoDB with Mongoose ODM
 - **Cache**: Redis for caching and session management
 - **Real-time**: Socket.io for real-time features

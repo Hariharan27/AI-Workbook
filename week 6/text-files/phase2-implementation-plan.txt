@@ -1,8 +1,8 @@
-IDEATORPECHU - PHASE 2 IMPLEMENTATION PLAN
-============================================
+IDEATORPECHU - PHASE 2 IMPLEMENTATION PLAN (MERN STACK)
+=======================================================
 
-Phase 2: Core Implementation Plan
-================================
+Phase 2: Core Implementation Plan (MongoDB, Express, React, Node.js)
+==================================================================
 
 🎯 Phase 2 Overview
 -------------------
@@ -141,8 +141,8 @@ Week 11-12: Polish & Testing
 4. Bug fixes and refinements
 5. Documentation completion
 
-🔧 Technology Stack for Phase 2
-===============================
+🔧 Technology Stack for Phase 2 (MERN)
+======================================
 
 Backend Core
 ------------
@@ -152,6 +152,15 @@ Backend Core
 - bcrypt: Password hashing
 - Multer: File uploads
 - Nodemailer: Email services
+
+Frontend Core (React)
+---------------------
+- React.js + TypeScript: Frontend framework
+- React Router: Client-side routing
+- Axios/Fetch: API communication
+- Socket.io-client: Real-time features
+- Material-UI/Ant Design: UI component library
+- Redux Toolkit/Zustand: State management
 
 Real-time & Caching
 -------------------
