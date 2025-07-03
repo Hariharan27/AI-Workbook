@@ -466,6 +466,40 @@ router.post('/reset-password', validateNewPassword, handleValidationErrors, asyn
   }
 });
 
+// GET /api/v1/auth/profile
+router.get('/profile', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'USER_NOT_FOUND',
+          message: 'User not found'
+        }
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        user: user.getFullProfile()
+      },
+      message: 'Profile retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('Profile retrieval error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'PROFILE_ERROR',
+        message: 'Failed to retrieve profile'
+      }
+    });
+  }
+});
+
 // GET /api/v1/auth/verify-email
 router.get('/verify-email', async (req, res) => {
   try {
