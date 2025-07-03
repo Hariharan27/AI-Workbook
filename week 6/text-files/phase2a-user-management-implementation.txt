@@ -1,0 +1,501 @@
+IDEATORPECHU - PHASE 2A IMPLEMENTATION PLAN
+============================================
+
+Phase 2A: User Management & Authentication
+==========================================
+
+🎯 Phase 2A Overview
+--------------------
+Implement comprehensive user management and authentication system for IdeatorPechu, 
+including user registration, login, profile management, and social features like 
+follow/unfollow functionality.
+
+📋 Implementation Breakdown
+==========================
+
+🔐 1. Authentication System
+---------------------------
+
+1.1 User Registration
+---------------------
+Express Route: POST /api/v1/auth/register
+
+Implementation Steps:
+1. Create User model using MongoDB schema from docs/mongodb-schemas.md
+2. Implement input validation (username, email, password, firstName, lastName)
+3. Password hashing with bcrypt (salt rounds: 12)
+4. Email uniqueness check
+5. Username uniqueness check
+6. JWT token generation for immediate login
+7. Email verification token generation
+8. Send verification email via Nodemailer
+
+Required Dependencies:
+- bcrypt: Password hashing
+- jsonwebtoken: JWT token generation
+- nodemailer: Email sending
+- express-validator: Input validation
+- mongoose: MongoDB ODM
+
+Code Structure:
+```javascript
+// models/User.js - Based on docs/mongodb-schemas.md
+const userSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true, index: true },
+  email: { type: String, required: true, unique: true, index: true },
+  password: { type: String, required: true },
+  firstName: { type: String, required: true },
+  lastName: { type: String, required: true },
+  avatar: { type: String, default: null },
+  bio: { type: String, maxLength: 500 },
+  location: { type: String },
+  website: { type: String },
+  isVerified: { type: Boolean, default: false },
+  isPrivate: { type: Boolean, default: false },
+  isActive: { type: Boolean, default: true },
+  lastSeen: { type: Date, default: Date.now },
+  preferences: {
+    notifications: {
+      email: { type: Boolean, default: true },
+      push: { type: Boolean, default: true },
+      sms: { type: Boolean, default: false }
+    },
+    privacy: {
+      profileVisibility: { type: String, enum: ['public', 'friends', 'private'], default: 'public' },
+      allowMessages: { type: String, enum: ['everyone', 'friends', 'none'], default: 'friends' }
+    }
+  },
+  stats: {
+    followersCount: { type: Number, default: 0 },
+    followingCount: { type: Number, default: 0 },
+    postsCount: { type: Number, default: 0 }
+  }
+}, {
+  timestamps: true
+});
+```
+
+1.2 User Login
+--------------
+Express Route: POST /api/v1/auth/login
+
+Implementation Steps:
+1. Email/username validation
+2. Password verification with bcrypt
+3. Check if user is active and verified
+4. Generate JWT access token (expires: 15 minutes)
+5. Generate JWT refresh token (expires: 7 days)
+6. Store refresh token in Redis for session management
+7. Update lastSeen timestamp
+8. Return user data (excluding password) with tokens
+
+Security Features:
+- Rate limiting: 5 login attempts per 15 minutes
+- Account lockout after 10 failed attempts
+- Password strength requirements
+- Session management with Redis
+
+1.3 Token Management
+--------------------
+Express Routes: 
+- POST /api/v1/auth/refresh-token
+- POST /api/v1/auth/logout
+
+Implementation Steps:
+1. Refresh token validation
+2. New access token generation
+3. Redis session management
+4. Token blacklisting for logout
+5. Automatic token rotation
+
+1.4 Password Reset
+------------------
+Express Routes:
+- POST /api/v1/auth/forgot-password
+- POST /api/v1/auth/reset-password
+
+Implementation Steps:
+1. Email validation
+2. Reset token generation (expires: 1 hour)
+3. Email sending with reset link
+4. Token verification
+5. Password update with new hash
+6. Invalidate all existing sessions
+
+👤 2. User Profile Management
+-----------------------------
+
+2.1 Profile CRUD Operations
+---------------------------
+Express Routes:
+- GET /api/v1/users/profile/:userId
+- PUT /api/v1/users/profile
+- POST /api/v1/users/avatar
+
+Implementation Steps:
+1. Profile retrieval with privacy checks
+2. Profile update validation
+3. Avatar upload with Multer middleware
+4. Image processing with Sharp
+5. Cloudinary integration for storage
+6. Profile visibility controls
+7. Data sanitization
+
+Privacy Features:
+- Public/private profile settings
+- Profile visibility based on relationship status
+- Selective data exposure
+- Blocked user handling
+
+2.2 Avatar Management
+---------------------
+Implementation Steps:
+1. Multer middleware configuration
+2. File type validation (images only)
+3. File size limits (5MB max)
+4. Image processing with Sharp
+5. Cloudinary upload
+6. Old avatar cleanup
+7. CDN integration
+
+Code Structure:
+```javascript
+// middleware/upload.js
+const multer = require('multer');
+const sharp = require('sharp');
+
+const avatarUpload = multer({
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  }
+});
+```
+
+🔍 3. User Search & Discovery
+-----------------------------
+
+3.1 User Search
+---------------
+Express Route: GET /api/v1/users/search
+
+Implementation Steps:
+1. Elasticsearch integration for advanced search
+2. MongoDB Atlas full-text search as fallback
+3. Search by username, firstName, lastName, bio
+4. Fuzzy matching for typos
+5. Relevance scoring
+6. Pagination support
+7. Privacy-aware results
+
+Search Features:
+- Real-time search suggestions
+- Search history tracking
+- Popular searches analytics
+- Search filters (location, verification status)
+
+3.2 User Discovery
+------------------
+Implementation Steps:
+1. Suggested users algorithm
+2. Mutual friends discovery
+3. Location-based suggestions
+4. Interest-based matching
+5. Activity-based recommendations
+
+🤝 4. Social Graph Implementation
+--------------------------------
+
+4.1 Follow/Unfollow System
+---------------------------
+Express Routes:
+- POST /api/v1/users/:userId/follow
+- DELETE /api/v1/users/:userId/follow
+- GET /api/v1/users/:userId/followers
+- GET /api/v1/users/:userId/following
+
+Implementation Steps:
+1. Relationship model creation (from docs/mongodb-schemas.md)
+2. Follow/unfollow logic
+3. Follower/following counts update
+4. Privacy checks for private accounts
+5. Notification generation
+6. Feed algorithm integration
+
+Relationship Schema:
+```javascript
+// models/Relationship.js
+const relationshipSchema = new mongoose.Schema({
+  follower: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  following: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  status: { type: String, enum: ['pending', 'accepted', 'blocked'], default: 'pending' },
+  createdAt: { type: Date, default: Date.now }
+}, {
+  timestamps: true
+});
+
+// Indexes for performance
+relationshipSchema.index({ follower: 1, following: 1 }, { unique: true });
+relationshipSchema.index({ following: 1, status: 1 });
+```
+
+4.2 Block/Unblock System
+------------------------
+Express Routes:
+- POST /api/v1/users/:userId/block
+- DELETE /api/v1/users/:userId/block
+
+Implementation Steps:
+1. Block relationship creation
+2. Mutual blocking logic
+3. Content visibility restrictions
+4. Message blocking
+5. Notification blocking
+
+🔒 5. Privacy & Security
+------------------------
+
+5.1 Privacy Controls
+--------------------
+Implementation Steps:
+1. Profile visibility settings
+2. Message privacy controls
+3. Post visibility options
+4. Search privacy settings
+5. Data export controls
+
+5.2 Security Features
+---------------------
+Implementation Steps:
+1. Input sanitization
+2. SQL injection prevention
+3. XSS protection
+4. CSRF protection
+5. Rate limiting
+6. Account lockout mechanisms
+
+📧 6. Email System
+------------------
+
+6.1 Email Templates
+-------------------
+Implementation Steps:
+1. Welcome email template
+2. Email verification template
+3. Password reset template
+4. Follow notification template
+5. Account security alerts
+
+6.2 Email Service
+-----------------
+Implementation Steps:
+1. Nodemailer configuration
+2. SMTP/Email service integration
+3. Email queue system
+4. Email tracking
+5. Bounce handling
+
+🛠 Technical Implementation Timeline
+===================================
+
+Week 1: Foundation Setup
+------------------------
+Day 1-2: Project structure and dependencies
+- Initialize Node.js project
+- Install required dependencies
+- Set up MongoDB connection
+- Configure environment variables
+
+Day 3-4: User model and database
+- Create User model based on docs/mongodb-schemas.md
+- Set up MongoDB indexes
+- Create database connection utilities
+- Implement basic CRUD operations
+
+Day 5-7: Authentication foundation
+- Set up JWT configuration
+- Implement bcrypt password hashing
+- Create authentication middleware
+- Set up Redis for session management
+
+Week 2: Authentication System
+-----------------------------
+Day 1-2: User registration
+- Implement registration route
+- Add input validation
+- Email uniqueness checks
+- Password strength validation
+
+Day 3-4: User login system
+- Implement login route
+- JWT token generation
+- Session management
+- Rate limiting
+
+Day 5-7: Token management
+- Refresh token implementation
+- Logout functionality
+- Token blacklisting
+- Session cleanup
+
+Week 3: Profile Management
+--------------------------
+Day 1-2: Profile CRUD operations
+- Profile retrieval routes
+- Profile update functionality
+- Privacy controls
+- Data validation
+
+Day 3-4: Avatar management
+- Multer middleware setup
+- Image processing with Sharp
+- Cloudinary integration
+- File cleanup utilities
+
+Day 5-7: Profile privacy features
+- Visibility settings
+- Privacy checks
+- Blocked user handling
+- Data sanitization
+
+Week 4: Social Features
+-----------------------
+Day 1-2: Follow/unfollow system
+- Relationship model implementation
+- Follow/unfollow logic
+- Count updates
+- Privacy checks
+
+Day 3-4: User search
+- Elasticsearch integration
+- Search algorithms
+- Pagination
+- Privacy-aware results
+
+Day 5-7: Block system
+- Block/unblock functionality
+- Content restrictions
+- Notification blocking
+- Mutual blocking logic
+
+🔧 Required Dependencies
+========================
+
+Core Dependencies:
+- express: Web framework
+- mongoose: MongoDB ODM
+- bcrypt: Password hashing
+- jsonwebtoken: JWT tokens
+- nodemailer: Email service
+- multer: File uploads
+- sharp: Image processing
+- redis: Session storage
+
+Security Dependencies:
+- helmet: Security headers
+- cors: Cross-origin resource sharing
+- express-rate-limit: Rate limiting
+- express-validator: Input validation
+- bcrypt: Password hashing
+
+Utility Dependencies:
+- cloudinary: Media storage
+- elasticsearch: Search engine
+- moment: Date handling
+- uuid: Unique identifiers
+
+Development Dependencies:
+- nodemon: Development server
+- jest: Testing framework
+- supertest: API testing
+- eslint: Code linting
+
+📊 Success Metrics
+==================
+
+Technical Metrics:
+- Registration success rate: > 95%
+- Login response time: < 200ms
+- Profile load time: < 300ms
+- Search response time: < 500ms
+- API uptime: > 99.9%
+
+User Experience Metrics:
+- Email verification rate: > 80%
+- Profile completion rate: > 70%
+- Follow/unfollow success rate: > 99%
+- Search accuracy: > 90%
+- User satisfaction: > 4.5/5
+
+Security Metrics:
+- Zero critical vulnerabilities
+- Password breach detection
+- Account lockout effectiveness
+- Rate limiting effectiveness
+- Session security
+
+🎯 Deliverables Checklist
+=========================
+
+Authentication System:
+☐ User registration with email verification
+☐ Secure login with JWT tokens
+☐ Password reset functionality
+☐ Token refresh mechanism
+☐ Session management with Redis
+☐ Rate limiting and security measures
+
+Profile Management:
+☐ Complete profile CRUD operations
+☐ Avatar upload and management
+☐ Privacy settings implementation
+☐ Profile visibility controls
+☐ Data validation and sanitization
+
+Social Features:
+☐ Follow/unfollow system
+☐ Block/unblock functionality
+☐ User search and discovery
+☐ Relationship management
+☐ Privacy-aware content filtering
+
+Email System:
+☐ Welcome email templates
+☐ Email verification system
+☐ Password reset emails
+☐ Notification emails
+☐ Email service integration
+
+Security & Privacy:
+☐ Input validation and sanitization
+☐ XSS and CSRF protection
+☐ Rate limiting implementation
+☐ Account security features
+☐ Privacy controls and settings
+
+Testing & Documentation:
+☐ Unit tests for all functions
+☐ Integration tests for APIs
+☐ API documentation
+☐ Security testing
+☐ Performance testing
+
+📝 Notes
+========
+- All implementations should follow the MongoDB schemas from docs/mongodb-schemas.md
+- Express routes should match the structure from docs/express-routes.md
+- Security best practices must be followed throughout
+- Performance optimization should be considered from the start
+- Tamil cultural integration should be maintained where appropriate
+- All features should support the "IdeatorPechu" brand identity
+
+Created: [Current Date]
+Project: IdeatorPechu Social Media Platform
+Phase: 2A - User Management & Authentication
+Status: Ready for Implementation 
