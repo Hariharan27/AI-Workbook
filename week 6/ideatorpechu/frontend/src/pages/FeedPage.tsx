@@ -10,47 +10,26 @@ import {
   Fab,
   Skeleton,
   Card,
-  CardContent
+  CardContent,
+  Snackbar,
+  Dialog,
+  DialogContent
 } from '@mui/material';
-import { Add, Refresh } from '@mui/icons-material';
+import { Add } from '@mui/icons-material';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import PostCard from '../components/PostCard';
 import PostEditor from '../components/PostEditor';
 import { useNavigate } from 'react-router-dom';
-
-interface Post {
-  _id: string;
-  content: string;
-  author: {
-    _id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-    avatar?: string;
-  };
-  media?: string[];
-  hashtags?: string[];
-  mentions?: Array<{
-    _id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-  }>;
-  location?: string;
-  isPublic: boolean;
-  likes: number;
-  comments: number;
-  shares: number;
-  isLiked: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import { postsAPI, likesAPI, sharesAPI } from '../services/api';
+import { Post } from '../services/api';
 
 interface FeedPageProps {
   currentUserId?: string;
+  showPostEditor?: boolean;
+  setShowPostEditor?: (show: boolean) => void;
 }
 
-const FeedPage: React.FC<FeedPageProps> = ({ currentUserId }) => {
+const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setShowPostEditor }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -58,84 +37,34 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId }) => {
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
-  const [showPostEditor, setShowPostEditor] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Mock data for development - replace with actual API calls
-  const mockPosts: Post[] = [
-    {
-      _id: '1',
-      content: 'Just finished implementing the new feed system! 🚀 #coding #react #typescript',
-      author: {
-        _id: 'user1',
-        username: 'johndoe',
-        firstName: 'John',
-        lastName: 'Doe',
-        avatar: 'https://via.placeholder.com/40'
-      },
-      hashtags: ['coding', 'react', 'typescript'],
-      isPublic: true,
-      likes: 15,
-      comments: 5,
-      shares: 2,
-      isLiked: false,
-      createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-      updatedAt: new Date().toISOString()
-    },
-    {
-      _id: '2',
-      content: 'Working on the IdeatorPechu project with @johndoe. The backend is looking great!',
-      author: {
-        _id: 'user2',
-        username: 'janedoe',
-        firstName: 'Jane',
-        lastName: 'Doe',
-        avatar: 'https://via.placeholder.com/40'
-      },
-      mentions: [
-        {
-          _id: 'user1',
-          username: 'johndoe',
-          firstName: 'John',
-          lastName: 'Doe'
-        }
-      ],
-      isPublic: true,
-      likes: 8,
-      comments: 3,
-      shares: 1,
-      isLiked: true,
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-      updatedAt: new Date().toISOString()
-    }
-  ];
+  // State for notifications
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
 
-  // Simulate API call
+  // Real API call to fetch posts
   const fetchPosts = async (pageNum: number = 1, filter: string = 'latest') => {
     try {
       setLoading(true);
       setError(null);
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock API response
-      const newPosts = mockPosts.map(post => ({
-        ...post,
-        _id: `${post._id}_${pageNum}`,
-        createdAt: new Date(Date.now() - Math.random() * 1000 * 60 * 60 * 24).toISOString()
-      }));
+      // Call the backend feed API
+      const response = await postsAPI.getFeed(pageNum, 20);
       
       if (pageNum === 1) {
-        setPosts(newPosts);
+        setPosts(response.posts);
       } else {
-        setPosts(prev => [...prev, ...newPosts]);
+        setPosts(prev => [...prev, ...response.posts]);
       }
       
-      setHasMore(pageNum < 3); // Mock: only 3 pages
+      setHasMore(response.hasMore);
       setPage(pageNum);
-    } catch (err) {
-      setError('Failed to load posts');
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to load posts');
       console.error('Error fetching posts:', err);
     } finally {
       setLoading(false);
@@ -168,18 +97,38 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId }) => {
 
   const handleLike = async (postId: string) => {
     try {
-      // TODO: Implement actual API call
-      setPosts(prev => prev.map(post => 
-        post._id === postId 
+      const post = posts.find(p => p._id === postId);
+      if (!post) return;
+
+      if (post.isLiked) {
+        await likesAPI.unlikePost(postId);
+      } else {
+        await likesAPI.likePost(postId);
+      }
+
+      // Update local state
+      setPosts(prev => prev.map(p => 
+        p._id === postId 
           ? { 
-              ...post, 
-              isLiked: !post.isLiked, 
-              likes: post.isLiked ? post.likes - 1 : post.likes + 1 
+              ...p, 
+              isLiked: !p.isLiked, 
+              likes: p.isLiked ? p.likes - 1 : p.likes + 1 
             }
-          : post
+          : p
       ));
-    } catch (err) {
+
+      setSnackbar({
+        open: true,
+        message: post.isLiked ? 'Post unliked' : 'Post liked!',
+        severity: 'success'
+      });
+    } catch (err: any) {
       console.error('Error liking post:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Failed to like post',
+        severity: 'error'
+      });
     }
   };
 
@@ -190,10 +139,27 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId }) => {
 
   const handleShare = async (postId: string) => {
     try {
-      // TODO: Implement share functionality
-      console.log('Sharing post:', postId);
-    } catch (err) {
+      await sharesAPI.sharePost(postId);
+      
+      // Update local state
+      setPosts(prev => prev.map(p => 
+        p._id === postId 
+          ? { ...p, shares: p.shares + 1 }
+          : p
+      ));
+
+      setSnackbar({
+        open: true,
+        message: 'Post shared successfully!',
+        severity: 'success'
+      });
+    } catch (err: any) {
       console.error('Error sharing post:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Failed to share post',
+        severity: 'error'
+      });
     }
   };
 
@@ -216,12 +182,27 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId }) => {
     console.log('Reporting post:', postId);
   };
 
-  const handleCreatePost = (data: any) => {
-    // TODO: Implement post creation
-    console.log('Creating post:', data);
-    setShowPostEditor(false);
-    // Refresh feed to show new post
-    refreshFeed();
+  const handleCreatePost = async (data: any) => {
+    try {
+      await postsAPI.createPost(data);
+      setShowPostEditor?.(false);
+      
+      // Refresh feed to show new post
+      await refreshFeed();
+      
+      setSnackbar({
+        open: true,
+        message: 'Post created successfully!',
+        severity: 'success'
+      });
+    } catch (err: any) {
+      console.error('Error creating post:', err);
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.message || 'Failed to create post',
+        severity: 'error'
+      });
+    }
   };
 
   const tabLabels = ['Latest', 'Trending', 'Following'];
@@ -244,14 +225,28 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId }) => {
         </Box>
       </Box>
 
-      {/* Post Editor */}
-      {showPostEditor && (
-        <PostEditor
-          onSubmit={handleCreatePost}
-          onCancel={() => setShowPostEditor(false)}
-          isLoading={false}
-        />
-      )}
+      {/* Post Editor Modal */}
+      <Dialog
+        open={showPostEditor === true}
+        onClose={() => setShowPostEditor?.(false)}
+        maxWidth="md"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+            elevation: 24
+          }
+        }}
+      >
+        <DialogContent sx={{ p: 0 }}>
+          <PostEditor
+            onSubmit={handleCreatePost}
+            onCancel={() => setShowPostEditor?.(false)}
+            isLoading={false}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Feed Content */}
       <Box>
@@ -348,10 +343,26 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId }) => {
           bottom: 16,
           right: 16,
         }}
-        onClick={() => setShowPostEditor(true)}
+        onClick={() => setShowPostEditor?.(true)}
       >
         <Add />
       </Fab>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setSnackbar({ ...snackbar, open: false })} 
+          severity={snackbar.severity}
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

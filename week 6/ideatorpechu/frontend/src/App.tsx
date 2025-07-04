@@ -28,6 +28,21 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// FeedPage Wrapper to handle post creation
+const FeedPageWrapper: React.FC = () => {
+  const [showPostEditor, setShowPostEditor] = React.useState(false);
+  
+  const handleCreatePost = () => {
+    setShowPostEditor(true);
+  };
+  
+  return (
+    <Layout onCreatePost={handleCreatePost}>
+      <FeedPage showPostEditor={showPostEditor} setShowPostEditor={setShowPostEditor} />
+    </Layout>
+  );
+};
+
 // Component to handle authentication loading state
 const AppContent: React.FC = () => {
   const { isLoading, isAuthenticated } = useAuth();
@@ -53,16 +68,12 @@ const AppContent: React.FC = () => {
         {/* Protected Routes with Layout */}
         <Route path="/" element={
           <ProtectedRoute>
-            <Layout>
-              <FeedPage />
-            </Layout>
+            <FeedPageWrapper />
           </ProtectedRoute>
         } />
         <Route path="/feed" element={
           <ProtectedRoute>
-            <Layout>
-              <FeedPage />
-            </Layout>
+            <FeedPageWrapper />
           </ProtectedRoute>
         } />
         <Route path="/dashboard" element={

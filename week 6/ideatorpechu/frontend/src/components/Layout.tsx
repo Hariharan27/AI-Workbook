@@ -10,6 +10,7 @@ interface LayoutProps {
   isLoading?: boolean;
   maxWidth?: 'xs' | 'sm' | 'md' | 'lg' | 'xl';
   disableContainer?: boolean;
+  onCreatePost?: () => void;
 }
 
 const Layout: React.FC<LayoutProps> = ({
@@ -18,7 +19,8 @@ const Layout: React.FC<LayoutProps> = ({
   searchSuggestions = [],
   isLoading = false,
   maxWidth = 'lg',
-  disableContainer = false
+  disableContainer = false,
+  onCreatePost
 }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -32,6 +34,7 @@ const Layout: React.FC<LayoutProps> = ({
         onSearch={onSearch}
         searchSuggestions={searchSuggestions}
         isLoading={isLoading}
+        onCreatePost={onCreatePost}
       />
       
       <Box component="main" sx={{ pt: isMobile ? 1 : 2 }}>

@@ -176,11 +176,15 @@ export const authAPI = {
 
 // Posts API
 export const postsAPI = {
-  getFeed: async (page = 1, limit = 10): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ success: boolean; data: { posts: Post[]; total: number; hasMore: boolean }; message: string }> = await api.get('/posts/feed', {
+  getFeed: async (page = 1, limit = 20): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { posts: Post[] }; message: string }> = await api.get('/feed', {
       params: { page, limit }
     });
-    return response.data.data;
+    return {
+      posts: response.data.data.posts,
+      total: response.data.data.posts.length,
+      hasMore: response.data.data.posts.length === parseInt(limit.toString())
+    };
   },
 
   getPost: async (postId: string): Promise<Post> => {
@@ -205,11 +209,11 @@ export const postsAPI = {
     }
     
     if (postData.hashtags) {
-      formData.append('hashtags', JSON.stringify(postData.hashtags));
+      postData.hashtags.forEach(hashtag => formData.append('hashtags[]', hashtag));
     }
     
     if (postData.mentions) {
-      formData.append('mentions', JSON.stringify(postData.mentions));
+      postData.mentions.forEach(mention => formData.append('mentions[]', mention));
     }
     
     if (postData.location) {
@@ -223,63 +227,120 @@ export const postsAPI = {
   },
 
   updatePost: async (postId: string, postData: Partial<Post>): Promise<Post> => {
-    const response: AxiosResponse<Post> = await api.put(`/posts/${postId}`, postData);
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; data: { post: Post }; message: string }> = await api.put(`/posts/${postId}`, postData);
+    return response.data.data.post;
   },
 
   deletePost: async (postId: string): Promise<{ message: string }> => {
-    const response: AxiosResponse<{ message: string }> = await api.delete(`/posts/${postId}`);
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.delete(`/posts/${postId}`);
+    return { message: response.data.message };
   },
 
+  getUserPosts: async (userId: string, page = 1, limit = 10): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { posts: Post[] }; message: string }> = await api.get(`/posts/user/${userId}`, {
+      params: { page, limit }
+    });
+    return {
+      posts: response.data.data.posts,
+      total: response.data.data.posts.length,
+      hasMore: response.data.data.posts.length === parseInt(limit.toString())
+    };
+  }
+};
+
+// Likes API
+export const likesAPI = {
   likePost: async (postId: string): Promise<{ message: string }> => {
-    const response: AxiosResponse<{ message: string }> = await api.post(`/posts/${postId}/like`);
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.post(`/likes/${postId}`, { type: 'post' });
+    return { message: response.data.message };
   },
 
   unlikePost: async (postId: string): Promise<{ message: string }> => {
-    const response: AxiosResponse<{ message: string }> = await api.delete(`/posts/${postId}/like`);
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.delete(`/likes/${postId}`, { data: { type: 'post' } });
+    return { message: response.data.message };
   },
 
+  likeComment: async (commentId: string): Promise<{ message: string }> => {
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.post(`/likes/${commentId}`, { type: 'comment' });
+    return { message: response.data.message };
+  },
+
+  unlikeComment: async (commentId: string): Promise<{ message: string }> => {
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.delete(`/likes/${commentId}`, { data: { type: 'comment' } });
+    return { message: response.data.message };
+  },
+
+  getPostLikes: async (postId: string, page = 1, limit = 20): Promise<{ users: User[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { users: User[] }; message: string }> = await api.get(`/likes/${postId}`, {
+      params: { type: 'post', page, limit }
+    });
+    return {
+      users: response.data.data.users,
+      total: response.data.data.users.length,
+      hasMore: response.data.data.users.length === parseInt(limit.toString())
+    };
+  }
+};
+
+// Shares API
+export const sharesAPI = {
   sharePost: async (postId: string, shareData?: { message?: string }): Promise<{ message: string }> => {
-    const response: AxiosResponse<{ message: string }> = await api.post(`/posts/${postId}/share`, shareData);
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.post(`/shares/${postId}`, shareData);
+    return { message: response.data.message };
+  },
+
+  getPostShares: async (postId: string, page = 1, limit = 20): Promise<{ shares: any[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { shares: any[] }; message: string }> = await api.get(`/shares/${postId}`, {
+      params: { page, limit }
+    });
+    return {
+      shares: response.data.data.shares,
+      total: response.data.data.shares.length,
+      hasMore: response.data.data.shares.length === parseInt(limit.toString())
+    };
+  },
+
+  getUserShares: async (userId: string, page = 1, limit = 10): Promise<{ shares: any[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { shares: any[] }; message: string }> = await api.get(`/shares/user/${userId}`, {
+      params: { page, limit }
+    });
+    return {
+      shares: response.data.data.shares,
+      total: response.data.data.shares.length,
+      hasMore: response.data.data.shares.length === parseInt(limit.toString())
+    };
   }
 };
 
 // Comments API
 export const commentsAPI = {
   getComments: async (postId: string, page = 1, limit = 10): Promise<{ comments: Comment[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ comments: Comment[]; total: number; hasMore: boolean }> = await api.get(`/posts/${postId}/comments`, {
+    const response: AxiosResponse<{ success: boolean; data: { comments: Comment[] }; message: string }> = await api.get(`/comments/${postId}`, {
       params: { page, limit }
     });
-    return response.data;
+    return {
+      comments: response.data.data.comments,
+      total: response.data.data.comments.length,
+      hasMore: response.data.data.comments.length === parseInt(limit.toString())
+    };
   },
 
   createComment: async (postId: string, commentData: { content: string; parentComment?: string }): Promise<Comment> => {
-    const response: AxiosResponse<Comment> = await api.post(`/posts/${postId}/comments`, commentData);
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; data: { comment: Comment }; message: string }> = await api.post(`/comments`, {
+      post: postId,
+      ...commentData
+    });
+    return response.data.data.comment;
   },
 
   updateComment: async (commentId: string, content: string): Promise<Comment> => {
-    const response: AxiosResponse<Comment> = await api.put(`/comments/${commentId}`, { content });
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; data: { comment: Comment }; message: string }> = await api.put(`/comments/${commentId}`, { content });
+    return response.data.data.comment;
   },
 
   deleteComment: async (commentId: string): Promise<{ message: string }> => {
-    const response: AxiosResponse<{ message: string }> = await api.delete(`/comments/${commentId}`);
-    return response.data;
-  },
-
-  likeComment: async (commentId: string): Promise<{ message: string }> => {
-    const response: AxiosResponse<{ message: string }> = await api.post(`/comments/${commentId}/like`);
-    return response.data;
-  },
-
-  unlikeComment: async (commentId: string): Promise<{ message: string }> => {
-    const response: AxiosResponse<{ message: string }> = await api.delete(`/comments/${commentId}/like`);
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.delete(`/comments/${commentId}`);
+    return { message: response.data.message };
   }
 };
 
@@ -354,37 +415,91 @@ export const hashtagsAPI = {
 
 // Search API
 export const searchAPI = {
-  search: async (query: string, type?: 'all' | 'posts' | 'users' | 'hashtags', page = 1, limit = 10): Promise<{ results: SearchResult[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ results: SearchResult[]; total: number; hasMore: boolean }> = await api.get('/search', {
-      params: { q: query, type, page, limit }
+  searchPosts: async (query: string, page = 1, limit = 10): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { posts: Post[] }; message: string }> = await api.get('/search/posts', {
+      params: { q: query, page, limit }
     });
-    return response.data;
+    return {
+      posts: response.data.data.posts,
+      total: response.data.data.posts.length,
+      hasMore: response.data.data.posts.length === parseInt(limit.toString())
+    };
   },
 
-  getSuggestions: async (query: string): Promise<SearchResult[]> => {
-    const response: AxiosResponse<SearchResult[]> = await api.get('/search/suggestions', {
-      params: { q: query }
+  searchUsers: async (query: string, page = 1, limit = 10): Promise<{ users: User[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { users: User[] }; message: string }> = await api.get('/search/users', {
+      params: { q: query, page, limit }
     });
-    return response.data;
+    return {
+      users: response.data.data.users,
+      total: response.data.data.users.length,
+      hasMore: response.data.data.users.length === parseInt(limit.toString())
+    };
+  },
+
+  searchHashtags: async (query: string, page = 1, limit = 10): Promise<{ hashtags: Hashtag[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { hashtags: Hashtag[] }; message: string }> = await api.get('/search/hashtags', {
+      params: { q: query, page, limit }
+    });
+    return {
+      hashtags: response.data.data.hashtags,
+      total: response.data.data.hashtags.length,
+      hasMore: response.data.data.hashtags.length === parseInt(limit.toString())
+    };
+  },
+
+  globalSearch: async (query: string, page = 1, limit = 10): Promise<{ results: SearchResult[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { results: SearchResult[] }; message: string }> = await api.get('/search/global', {
+      params: { q: query, page, limit }
+    });
+    return {
+      results: response.data.data.results,
+      total: response.data.data.results.length,
+      hasMore: response.data.data.results.length === parseInt(limit.toString())
+    };
   }
 };
 
 // Moderation API
 export const moderationAPI = {
+  checkContent: async (content: string): Promise<{ isAppropriate: boolean; confidence: number; flags: string[] }> => {
+    const response: AxiosResponse<{ success: boolean; data: { isAppropriate: boolean; confidence: number; flags: string[] }; message: string }> = await api.post('/moderation/check', {
+      content
+    });
+    return response.data.data;
+  },
+
   reportContent: async (contentType: 'post' | 'comment' | 'user', contentId: string, reason: string): Promise<{ message: string }> => {
-    const response: AxiosResponse<{ message: string }> = await api.post('/moderation/report', {
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.post('/moderation/report', {
       contentType,
       contentId,
       reason
     });
-    return response.data;
+    return { message: response.data.message };
   },
 
-  checkContent: async (content: string): Promise<{ isAppropriate: boolean; confidence: number; flags: string[] }> => {
-    const response: AxiosResponse<{ isAppropriate: boolean; confidence: number; flags: string[] }> = await api.post('/moderation/check', {
-      content
+  getPendingPosts: async (page = 1, limit = 10): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { posts: Post[] }; message: string }> = await api.get('/moderation/pending', {
+      params: { page, limit }
     });
-    return response.data;
+    return {
+      posts: response.data.data.posts,
+      total: response.data.data.posts.length,
+      hasMore: response.data.data.posts.length === parseInt(limit.toString())
+    };
+  },
+
+  getModerationStats: async (): Promise<any> => {
+    const response: AxiosResponse<{ success: boolean; data: any; message: string }> = await api.get('/moderation/stats');
+    return response.data.data;
+  },
+
+  moderatePost: async (postId: string, action: 'approve' | 'reject', reason?: string): Promise<{ message: string }> => {
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.put(`/moderation/${postId}`, {
+      action,
+      reason
+    });
+    return { message: response.data.message };
   }
 };
 

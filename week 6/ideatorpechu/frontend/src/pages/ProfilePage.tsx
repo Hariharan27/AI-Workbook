@@ -10,8 +10,6 @@ import {
   Tab,
   Card,
   CardContent,
-  Grid,
-  Divider,
   IconButton,
   Menu,
   MenuItem,
@@ -35,59 +33,10 @@ import {
   Flag
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
 import PostCard from '../components/PostCard';
 import PostEditor from '../components/PostEditor';
-
-interface User {
-  _id: string;
-  username: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  avatar?: string;
-  coverImage?: string;
-  bio?: string;
-  location?: string;
-  website?: string;
-  dateOfBirth?: string;
-  joinedDate: string;
-  isVerified: boolean;
-  isPrivate: boolean;
-  followersCount: number;
-  followingCount: number;
-  postsCount: number;
-  isFollowing: boolean;
-  isBlocked: boolean;
-}
-
-interface Post {
-  _id: string;
-  content: string;
-  author: {
-    _id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-    avatar?: string;
-  };
-  media?: string[];
-  hashtags?: string[];
-  mentions?: Array<{
-    _id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-  }>;
-  location?: string;
-  isPublic: boolean;
-  likes: number;
-  comments: number;
-  shares: number;
-  isLiked: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import { Post, User } from '../services/api';
+import { formatDistanceToNow } from 'date-fns';
 
 interface ProfilePageProps {
   currentUserId?: string;
@@ -138,7 +87,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
         username: mockUser.username,
         firstName: mockUser.firstName,
         lastName: mockUser.lastName,
-        avatar: mockUser.avatar
+        email: mockUser.email,
+        avatar: mockUser.avatar,
+        joinedDate: mockUser.joinedDate,
+        isVerified: mockUser.isVerified,
+        isPrivate: mockUser.isPrivate,
+        followersCount: mockUser.followersCount,
+        followingCount: mockUser.followingCount,
+        postsCount: mockUser.postsCount
       },
       hashtags: ['coding', 'react', 'typescript'],
       isPublic: true,
@@ -157,7 +113,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
         username: mockUser.username,
         firstName: mockUser.firstName,
         lastName: mockUser.lastName,
-        avatar: mockUser.avatar
+        email: mockUser.email,
+        avatar: mockUser.avatar,
+        joinedDate: mockUser.joinedDate,
+        isVerified: mockUser.isVerified,
+        isPrivate: mockUser.isPrivate,
+        followersCount: mockUser.followersCount,
+        followingCount: mockUser.followingCount,
+        postsCount: mockUser.postsCount
       },
       isPublic: true,
       likes: 8,

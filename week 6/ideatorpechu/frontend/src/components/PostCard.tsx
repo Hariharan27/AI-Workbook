@@ -8,7 +8,6 @@ import {
   IconButton,
   Chip,
   Box,
-  Grid,
   Divider,
   Tooltip,
   Menu,
@@ -30,35 +29,10 @@ import {
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { Post } from '../services/api';
 
 interface PostCardProps {
-  post: {
-    _id: string;
-    content: string;
-    author: {
-      _id: string;
-      username: string;
-      firstName: string;
-      lastName: string;
-      avatar?: string;
-    };
-    media?: string[];
-    hashtags?: string[];
-    mentions?: Array<{
-      _id: string;
-      username: string;
-      firstName: string;
-      lastName: string;
-    }>;
-    location?: string;
-    isPublic: boolean;
-    likes: number;
-    comments: number;
-    shares: number;
-    isLiked: boolean;
-    createdAt: string;
-    updatedAt: string;
-  };
+  post: Post;
   onLike: (postId: string) => void;
   onComment: (postId: string) => void;
   onShare: (postId: string) => void;

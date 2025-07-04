@@ -8,25 +8,21 @@ import {
   Tab,
   Button,
   Avatar,
-  Divider,
-  CircularProgress,
-  Alert,
-  Skeleton,
   Card,
-  CardContent
+  CardContent,
+  Skeleton,
+  Alert
 } from '@mui/material';
 import {
   TrendingUp,
   TrendingDown,
   People,
-  PhotoLibrary,
-  VideoLibrary,
-  Article
+  PhotoLibrary
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
-import { formatDistanceToNow } from 'date-fns';
 import PostCard from '../components/PostCard';
 import PostEditor from '../components/PostEditor';
+import { Post, User } from '../services/api';
 
 interface Hashtag {
   _id: string;
@@ -40,34 +36,6 @@ interface Hashtag {
   topPosts: Post[];
   recentPosts: Post[];
   mediaPosts: Post[];
-}
-
-interface Post {
-  _id: string;
-  content: string;
-  author: {
-    _id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-    avatar?: string;
-  };
-  media?: string[];
-  hashtags?: string[];
-  mentions?: Array<{
-    _id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-  }>;
-  location?: string;
-  isPublic: boolean;
-  likes: number;
-  comments: number;
-  shares: number;
-  isLiked: boolean;
-  createdAt: string;
-  updatedAt: string;
 }
 
 interface HashtagPageProps {
@@ -104,7 +72,14 @@ const HashtagPage: React.FC<HashtagPageProps> = ({ currentUserId }) => {
           username: 'johndoe',
           firstName: 'John',
           lastName: 'Doe',
-          avatar: 'https://via.placeholder.com/40'
+          email: 'john@example.com',
+          avatar: 'https://via.placeholder.com/40',
+          joinedDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 365).toISOString(),
+          isVerified: true,
+          isPrivate: false,
+          followersCount: 1200,
+          followingCount: 800,
+          postsCount: 45
         },
         hashtags: ['react', 'typescript', 'webdev'],
         isPublic: true,
@@ -123,7 +98,14 @@ const HashtagPage: React.FC<HashtagPageProps> = ({ currentUserId }) => {
           username: 'janedoe',
           firstName: 'Jane',
           lastName: 'Doe',
-          avatar: 'https://via.placeholder.com/40'
+          email: 'jane@example.com',
+          avatar: 'https://via.placeholder.com/40',
+          joinedDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 300).toISOString(),
+          isVerified: true,
+          isPrivate: false,
+          followersCount: 800,
+          followingCount: 600,
+          postsCount: 32
         },
         hashtags: ['react', 'react18', 'frontend'],
         isPublic: true,
@@ -144,7 +126,14 @@ const HashtagPage: React.FC<HashtagPageProps> = ({ currentUserId }) => {
           username: 'newbie',
           firstName: 'New',
           lastName: 'User',
-          avatar: 'https://via.placeholder.com/40'
+          email: 'newbie@example.com',
+          avatar: 'https://via.placeholder.com/40',
+          joinedDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
+          isVerified: false,
+          isPrivate: false,
+          followersCount: 15,
+          followingCount: 25,
+          postsCount: 3
         },
         hashtags: ['react', 'hooks', 'learning'],
         isPublic: true,

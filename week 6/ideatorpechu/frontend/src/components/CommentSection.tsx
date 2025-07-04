@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -13,7 +13,8 @@ import {
   ListItemIcon,
   ListItemText,
   Collapse,
-  Alert
+  Alert,
+  Skeleton
 } from '@mui/material';
 import {
   Send,
@@ -31,36 +32,16 @@ import { formatDistanceToNow } from 'date-fns';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import { Comment, commentsAPI, likesAPI } from '../services/api';
 
-interface Comment {
-  _id: string;
-  content: string;
-  author: {
-    _id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-    avatar?: string;
-  };
-  post: string;
-  parentComment?: string;
-  replies?: Comment[];
-  likes: number;
-  isLiked: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+
 
 interface CommentSectionProps {
   postId: string;
-  comments: Comment[];
   currentUserId?: string;
-  onAddComment: (content: string, parentId?: string) => void;
-  onLikeComment: (commentId: string) => void;
-  onEditComment: (commentId: string, content: string) => void;
-  onDeleteComment: (commentId: string) => void;
-  onReportComment: (commentId: string) => void;
-  isLoading?: boolean;
+  onCommentAdded?: () => void;
+  onCommentUpdated?: () => void;
+  onCommentDeleted?: () => void;
 }
 
 interface CommentFormData {
@@ -73,15 +54,15 @@ const schema = yup.object({
 
 const CommentSection: React.FC<CommentSectionProps> = ({
   postId,
-  comments,
   currentUserId,
-  onAddComment,
-  onLikeComment,
-  onEditComment,
-  onDeleteComment,
-  onReportComment,
-  isLoading = false
+  onCommentAdded,
+  onCommentUpdated,
+  onCommentDeleted
 }) => {
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [expandedReplies, setExpandedReplies] = useState<Set<string>>(new Set());
@@ -99,17 +80,108 @@ const CommentSection: React.FC<CommentSectionProps> = ({
     }
   });
 
-  const handleAddComment = (data: CommentFormData) => {
-    onAddComment(data.content, replyingTo || undefined);
-    reset();
-    setReplyingTo(null);
+  // Load comments
+  const loadComments = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await commentsAPI.getComments(postId, 1, 50);
+      setComments(response.comments || []);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load comments');
+      console.error('Load comments error:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEditComment = (data: CommentFormData) => {
-    if (editingComment) {
-      onEditComment(editingComment, data.content);
-      setEditingComment(null);
+  useEffect(() => {
+    if (postId) {
+      loadComments();
+    }
+  }, [postId]);
+
+  const handleAddComment = async (data: CommentFormData) => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await commentsAPI.createComment(postId, {
+        content: data.content,
+        parentComment: replyingTo || undefined
+      });
       reset();
+      setReplyingTo(null);
+      await loadComments(); // Reload comments to get the new one
+      onCommentAdded?.();
+    } catch (err: any) {
+      setError(err.message || 'Failed to add comment');
+      console.error('Add comment error:', err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEditComment = async (data: CommentFormData) => {
+    if (editingComment) {
+      setSubmitting(true);
+      setError(null);
+      try {
+        await commentsAPI.updateComment(editingComment, data.content);
+        setEditingComment(null);
+        reset();
+        await loadComments(); // Reload comments to get the updated one
+        onCommentUpdated?.();
+      } catch (err: any) {
+        setError(err.message || 'Failed to update comment');
+        console.error('Update comment error:', err);
+      } finally {
+        setSubmitting(false);
+      }
+    }
+  };
+
+  const handleLikeComment = async (commentId: string) => {
+    try {
+      const comment = comments.find(c => c._id === commentId);
+      if (comment) {
+        if (comment.isLiked) {
+          await likesAPI.unlikeComment(commentId);
+        } else {
+          await likesAPI.likeComment(commentId);
+        }
+        // Update the comment in the local state
+        setComments(prev => prev.map(c => 
+          c._id === commentId 
+            ? { ...c, isLiked: !c.isLiked, likes: c.isLiked ? c.likes - 1 : c.likes + 1 }
+            : c
+        ));
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to like/unlike comment');
+      console.error('Like comment error:', err);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    try {
+      await commentsAPI.deleteComment(commentId);
+      setComments(prev => prev.filter(c => c._id !== commentId));
+      onCommentDeleted?.();
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete comment');
+      console.error('Delete comment error:', err);
+    }
+  };
+
+  const handleReportComment = async (commentId: string) => {
+    try {
+      // This would typically call a moderation API
+      console.log('Reporting comment:', commentId);
+      // For now, just show a success message
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to report comment');
+      console.error('Report comment error:', err);
     }
   };
 
@@ -139,14 +211,14 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
   const handleDelete = () => {
     if (menuAnchor) {
-      onDeleteComment(menuAnchor.commentId);
+      handleDeleteComment(menuAnchor.commentId);
       handleMenuClose();
     }
   };
 
   const handleReport = () => {
     if (menuAnchor) {
-      onReportComment(menuAnchor.commentId);
+      handleReportComment(menuAnchor.commentId);
       handleMenuClose();
     }
   };
@@ -193,7 +265,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
           <Box display="flex" alignItems="center" gap={1}>
             <IconButton
               size="small"
-              onClick={() => onLikeComment(comment._id)}
+              onClick={() => handleLikeComment(comment._id)}
               color={comment.isLiked ? 'error' : 'default'}
             >
               {comment.isLiked ? <Favorite fontSize="small" /> : <FavoriteBorder fontSize="small" />}
@@ -263,7 +335,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                   <Button
                     type="submit"
                     variant="contained"
-                    disabled={isLoading}
+                    disabled={submitting}
                     sx={{ minWidth: 'auto', px: 2 }}
                   >
                     <Send fontSize="small" />
@@ -297,7 +369,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                   <Button
                     type="submit"
                     variant="contained"
-                    disabled={isLoading}
+                    disabled={submitting}
                     sx={{ minWidth: 'auto', px: 2 }}
                   >
                     <Send fontSize="small" />
@@ -363,7 +435,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
                 <Button
                   type="submit"
                   variant="contained"
-                  disabled={isLoading}
+                  disabled={submitting}
                   startIcon={<Send />}
                 >
                   Comment

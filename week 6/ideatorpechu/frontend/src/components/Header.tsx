@@ -42,6 +42,7 @@ interface HeaderProps {
   onSearch?: (query: string) => void;
   searchSuggestions?: any[];
   isLoading?: boolean;
+  onCreatePost?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -49,7 +50,8 @@ const Header: React.FC<HeaderProps> = ({
   onLogout,
   onSearch,
   searchSuggestions = [],
-  isLoading = false
+  isLoading = false,
+  onCreatePost
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -91,7 +93,11 @@ const Header: React.FC<HeaderProps> = ({
   };
 
   const handleCreatePost = () => {
-    navigate('/create-post');
+    if (onCreatePost) {
+      onCreatePost();
+    } else {
+      navigate('/create-post');
+    }
   };
 
   const isActiveRoute = (path: string) => {
