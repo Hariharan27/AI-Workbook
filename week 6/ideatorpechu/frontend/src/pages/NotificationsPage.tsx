@@ -1,230 +1,79 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box,
   Container,
   Typography,
-  Tabs,
-  Tab,
+  Box,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Avatar,
+  Paper,
   Button,
+  Chip,
+  IconButton,
+  Menu,
+  MenuItem,
   Divider,
-  CircularProgress,
   Alert,
+  Snackbar,
   Skeleton,
-  Chip
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Notifications,
   NotificationsActive,
+  NotificationsNone,
   NotificationsOff,
-  ClearAll,
-  Settings
+  Settings,
+  MoreVert,
+  CheckCircle,
+  Block,
+  Flag
 } from '@mui/icons-material';
 import NotificationCard from '../components/NotificationCard';
 import UserCard from '../components/UserCard';
-
-interface Notification {
-  _id: string;
-  type: 'like' | 'comment' | 'share' | 'follow' | 'mention' | 'hashtag' | 'post';
-  title: string;
-  message: string;
-  sender?: {
-    _id: string;
-    username: string;
-    firstName: string;
-    lastName: string;
-    avatar?: string;
-  };
-  post?: {
-    _id: string;
-    content: string;
-    author: {
-      _id: string;
-      username: string;
-      firstName: string;
-      lastName: string;
-    };
-  };
-  comment?: {
-    _id: string;
-    content: string;
-  };
-  hashtag?: {
-    name: string;
-  };
-  isRead: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-interface User {
-  _id: string;
-  username: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  avatar?: string;
-  coverImage?: string;
-  bio?: string;
-  location?: string;
-  website?: string;
-  dateOfBirth?: string;
-  joinedDate: string;
-  isVerified: boolean;
-  isPrivate: boolean;
-  followersCount: number;
-  followingCount: number;
-  postsCount: number;
-  isFollowing?: boolean;
-  isBlocked?: boolean;
-}
+import { formatDistanceToNow } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
+import { User, Notification, notificationsAPI, usersAPI } from '../services/api';
 
 interface NotificationsPageProps {
   currentUserId?: string;
 }
 
 const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [suggestedUsers, setSuggestedUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: ''
+  });
 
   const tabLabels = ['All', 'Unread', 'Following', 'Mentions'];
-
-  // Mock notifications data for development
-  const mockNotifications: Notification[] = [
-    {
-      _id: '1',
-      type: 'like',
-      title: 'John Doe liked your post',
-      message: 'liked your post',
-      sender: {
-        _id: '1',
-        username: 'johndoe',
-        firstName: 'John',
-        lastName: 'Doe',
-        avatar: 'https://via.placeholder.com/40'
-      },
-      post: {
-        _id: '1',
-        content: 'Just finished implementing the new feed system! 🚀 #coding #react #typescript',
-        author: {
-          _id: currentUserId || 'current',
-          username: 'currentuser',
-          firstName: 'Current',
-          lastName: 'User'
-        }
-      },
-      isRead: false,
-      createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      _id: '2',
-      type: 'comment',
-      title: 'Jane Smith commented on your post',
-      message: 'commented on your post',
-      sender: {
-        _id: '2',
-        username: 'janesmith',
-        firstName: 'Jane',
-        lastName: 'Smith',
-        avatar: 'https://via.placeholder.com/40'
-      },
-      post: {
-        _id: '1',
-        content: 'Just finished implementing the new feed system! 🚀 #coding #react #typescript',
-        author: {
-          _id: currentUserId || 'current',
-          username: 'currentuser',
-          firstName: 'Current',
-          lastName: 'User'
-        }
-      },
-      comment: {
-        _id: '1',
-        content: 'Great work! The implementation looks solid.'
-      },
-      isRead: true,
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      _id: '3',
-      type: 'follow',
-      title: 'New User started following you',
-      message: 'started following you',
-      sender: {
-        _id: '3',
-        username: 'newuser',
-        firstName: 'New',
-        lastName: 'User',
-        avatar: 'https://via.placeholder.com/40'
-      },
-      isRead: false,
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-  ];
-
-  // Mock suggested users data
-  const mockSuggestedUsers: User[] = [
-    {
-      _id: '4',
-      username: 'developer1',
-      firstName: 'Alex',
-      lastName: 'Johnson',
-      email: 'alex@example.com',
-      avatar: 'https://via.placeholder.com/40',
-      coverImage: undefined,
-      bio: 'Full-stack developer passionate about React and Node.js',
-      location: 'San Francisco, CA',
-      website: 'https://alexjohnson.dev',
-      dateOfBirth: undefined,
-      joinedDate: '2023-03-15T00:00:00.000Z',
-      isVerified: true,
-      isPrivate: false,
-      followersCount: 1250,
-      followingCount: 450,
-      postsCount: 89,
-      isFollowing: false,
-      isBlocked: false
-    },
-    {
-      _id: '5',
-      username: 'designer1',
-      firstName: 'Sarah',
-      lastName: 'Wilson',
-      email: 'sarah@example.com',
-      avatar: 'https://via.placeholder.com/40',
-      coverImage: undefined,
-      bio: 'UI/UX Designer creating beautiful user experiences',
-      location: 'New York, NY',
-      website: 'https://sarahwilson.design',
-      dateOfBirth: undefined,
-      joinedDate: '2023-02-20T00:00:00.000Z',
-      isVerified: false,
-      isPrivate: false,
-      followersCount: 890,
-      followingCount: 320,
-      postsCount: 45,
-      isFollowing: true,
-      isBlocked: false
-    }
-  ];
 
   useEffect(() => {
     const fetchNotifications = async () => {
       try {
         setLoading(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setNotifications(mockNotifications);
-        setSuggestedUsers(mockSuggestedUsers);
-        setUnreadCount(mockNotifications.filter(n => !n.isRead).length);
-      } catch (err) {
-        setError('Failed to load notifications');
+        setError(null);
+        
+        // Fetch notifications
+        const notificationsData = await notificationsAPI.getNotifications(1, 50);
+        setNotifications(notificationsData.notifications || []);
+        setUnreadCount(notificationsData.notifications?.filter(n => !n.isRead).length || 0);
+        
+        // Fetch suggested users
+        const suggestedUsersData = await notificationsAPI.getSuggestedUsers(5);
+        setSuggestedUsers(suggestedUsersData.users || []);
+        
+      } catch (err: any) {
+        setError(err.message || 'Failed to load notifications');
         console.error('Notifications error:', err);
       } finally {
         setLoading(false);
@@ -238,15 +87,17 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
     setActiveTab(newValue);
   };
 
-  const handleMarkAsRead = (notificationId: string) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification._id === notificationId 
-          ? { ...notification, isRead: true }
-          : notification
-      )
-    );
-    setUnreadCount(prev => Math.max(0, prev - 1));
+  const handleMarkAsRead = async (notificationId: string) => {
+    try {
+      await notificationsAPI.markAsRead(notificationId);
+      setNotifications(prev => prev.map(n => 
+        n._id === notificationId ? { ...n, isRead: true } : n
+      ));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || 'Failed to mark as read' });
+      console.error('Mark as read error:', err);
+    }
   };
 
   const handleDeleteNotification = (notificationId: string) => {
@@ -265,14 +116,17 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
     setUnreadCount(0);
   };
 
-  const handleFollowUser = (userId: string) => {
-    setSuggestedUsers(prev => 
-      prev.map(user => 
-        user._id === userId 
-          ? { ...user, isFollowing: true }
-          : user
-      )
-    );
+  const handleFollowUser = async (userId: string) => {
+    try {
+      await usersAPI.followUser(userId);
+      setSuggestedUsers(prev => prev.map(user => 
+        user._id === userId ? { ...user, isFollowing: true } : user
+      ));
+      setSnackbar({ open: true, message: 'User followed successfully' });
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || 'Failed to follow user' });
+      console.error('Follow user error:', err);
+    }
   };
 
   const handleUnfollowUser = (userId: string) => {
@@ -301,6 +155,33 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
   };
 
   const filteredNotifications = getFilteredNotifications();
+
+  // Convert API Notification to NotificationCard Notification
+  const convertNotification = (apiNotification: Notification) => {
+    return {
+      _id: apiNotification._id,
+      type: apiNotification.type === 'reply' ? 'comment' : apiNotification.type,
+      title: apiNotification.title,
+      message: apiNotification.message,
+      sender: apiNotification.sender,
+      post: apiNotification.post ? {
+        _id: apiNotification.post._id,
+        content: apiNotification.post.content,
+        author: {
+          _id: currentUserId || '',
+          username: 'currentuser',
+          firstName: 'Current',
+          lastName: 'User'
+        }
+      } : undefined,
+      comment: apiNotification.comment,
+      isRead: apiNotification.isRead,
+      createdAt: apiNotification.createdAt,
+      updatedAt: apiNotification.updatedAt
+    };
+  };
+
+  const convertedNotifications = filteredNotifications.map(convertNotification);
 
   if (loading) {
     return (
@@ -398,7 +279,7 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
         </Box>
       ) : (
         <Box>
-          {filteredNotifications.map(notification => (
+          {convertedNotifications.map(notification => (
             <NotificationCard
               key={notification._id}
               notification={notification}
@@ -435,6 +316,16 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
           </Box>
         </>
       )}
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ open: false, message: '' })}
+      >
+        <Alert onClose={() => setSnackbar({ open: false, message: '' })} severity="success">
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

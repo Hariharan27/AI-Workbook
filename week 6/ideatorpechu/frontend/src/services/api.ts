@@ -32,7 +32,7 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token');
-      window.location.href = '/login';
+        window.location.href = '/login';
     }
     return Promise.reject(error);
   }
@@ -45,18 +45,18 @@ export interface User {
   firstName: string;
   lastName: string;
   email: string;
-  avatar?: string;
+      avatar?: string;
   coverImage?: string;
-  bio?: string;
+      bio?: string;
   location?: string;
   website?: string;
   dateOfBirth?: string;
   joinedDate: string;
-  isVerified: boolean;
-  isPrivate: boolean;
-  followersCount: number;
-  followingCount: number;
-  postsCount: number;
+      isVerified: boolean;
+      isPrivate: boolean;
+        followersCount: number;
+        followingCount: number;
+        postsCount: number;
   isFollowing?: boolean;
   isBlocked?: boolean;
 }
@@ -214,8 +214,8 @@ export const postsAPI = {
     
     if (postData.mentions) {
       postData.mentions.forEach(mention => formData.append('mentions[]', mention));
-    }
-    
+}
+
     if (postData.location) {
       formData.append('location', postData.location);
     }
@@ -500,6 +500,64 @@ export const moderationAPI = {
       reason
     });
     return { message: response.data.message };
+  }
+};
+
+// Notifications API
+export interface Notification {
+  _id: string;
+  recipient: string;
+  sender: User;
+  type: 'like' | 'comment' | 'follow' | 'mention' | 'share' | 'reply';
+  post?: {
+    _id: string;
+    content: string;
+  };
+  comment?: {
+    _id: string;
+    content: string;
+  };
+  isRead: boolean;
+  title: string;
+  message: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const notificationsAPI = {
+  getNotifications: async (page = 1, limit = 20, type?: string): Promise<{ notifications: Notification[]; total: number; hasMore: boolean }> => {
+    const params: any = { page, limit };
+    if (type) params.type = type;
+    
+    const response: AxiosResponse<{ success: boolean; data: { notifications: Notification[]; total: number; hasMore: boolean }; message: string }> = await api.get('/notifications', { params });
+    return response.data.data;
+  },
+
+  markAsRead: async (notificationId: string): Promise<{ notification: Notification }> => {
+    const response: AxiosResponse<{ success: boolean; data: { notification: Notification }; message: string }> = await api.put(`/notifications/${notificationId}/read`);
+    return response.data.data;
+  },
+
+  markAllAsRead: async (): Promise<{ message: string }> => {
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.put('/notifications/read-all');
+    return { message: response.data.message };
+  },
+
+  getUnreadCount: async (): Promise<{ count: number }> => {
+    const response: AxiosResponse<{ success: boolean; data: { count: number }; message: string }> = await api.get('/notifications/unread-count');
+    return response.data.data;
+  },
+
+  deleteNotification: async (notificationId: string): Promise<{ message: string }> => {
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.delete(`/notifications/${notificationId}`);
+    return { message: response.data.message };
+  },
+
+  getSuggestedUsers: async (limit = 5): Promise<{ users: User[] }> => {
+    const response: AxiosResponse<{ success: boolean; data: { users: User[] }; message: string }> = await api.get('/notifications/suggested-users', {
+      params: { limit }
+    });
+    return response.data.data;
   }
 };
 

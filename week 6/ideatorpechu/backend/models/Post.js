@@ -190,9 +190,9 @@ postSchema.statics.getFeedPosts = async function(userId, followingIds, options =
   const posts = await this.aggregate([
     {
       $match: {
-        author: { $in: authorIds },
-        isPublic: true,
-        'moderation.status': 'approved'
+    author: { $in: authorIds },
+    isPublic: true,
+    'moderation.status': 'approved'
       }
     },
     {

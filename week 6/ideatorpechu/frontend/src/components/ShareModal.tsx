@@ -35,6 +35,7 @@ import {
   CheckCircle
 } from '@mui/icons-material';
 import { useDebounce } from '../hooks/useDebounce';
+import { notificationsAPI } from '../services/api';
 
 interface User {
   _id: string;
@@ -85,38 +86,22 @@ const ShareModal: React.FC<ShareModalProps> = ({
   const [copied, setCopied] = useState(false);
   const debouncedSearch = useDebounce(searchQuery, 300);
 
-  // Mock users data for development
-  const mockUsers: User[] = [
-    {
-      _id: '1',
-      username: 'johndoe',
-      firstName: 'John',
-      lastName: 'Doe',
-      avatar: 'https://via.placeholder.com/40',
-      isFollowing: true
-    },
-    {
-      _id: '2',
-      username: 'janesmith',
-      firstName: 'Jane',
-      lastName: 'Smith',
-      avatar: 'https://via.placeholder.com/40',
-      isFollowing: false
-    },
-    {
-      _id: '3',
-      username: 'alexjohnson',
-      firstName: 'Alex',
-      lastName: 'Johnson',
-      avatar: 'https://via.placeholder.com/40',
-      isFollowing: true
-    }
-  ];
-
   useEffect(() => {
     if (open) {
-      setUsers(mockUsers);
-      setFilteredUsers(mockUsers);
+      // Load suggested users for sharing
+      const loadSuggestedUsers = async () => {
+        try {
+          const suggestedUsersData = await notificationsAPI.getSuggestedUsers(10);
+          setUsers(suggestedUsersData.users || []);
+          setFilteredUsers(suggestedUsersData.users || []);
+        } catch (err) {
+          console.error('Failed to load suggested users:', err);
+          setUsers([]);
+          setFilteredUsers([]);
+        }
+      };
+      
+      loadSuggestedUsers();
       setSelectedUsers([]);
       setShareMessage('');
       setCopied(false);

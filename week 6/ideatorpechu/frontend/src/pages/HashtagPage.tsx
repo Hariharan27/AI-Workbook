@@ -1,42 +1,45 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Box,
   Container,
   Typography,
+  Box,
   Chip,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemAvatar,
+  Avatar,
+  Paper,
   Tabs,
   Tab,
   Button,
-  Avatar,
+  TextField,
+  InputAdornment,
+  Skeleton,
+  Alert,
+  Snackbar,
   Card,
   CardContent,
-  Skeleton,
-  Alert
+  CircularProgress
 } from '@mui/material';
 import {
+  Search as SearchIcon,
   TrendingUp,
   TrendingDown,
-  People,
-  PhotoLibrary
+  Person,
+  Share,
+  Favorite,
+  FavoriteBorder,
+  Comment,
+  Visibility,
+  PhotoLibrary,
+  People
 } from '@mui/icons-material';
-import { useParams, useNavigate } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
 import PostCard from '../components/PostCard';
 import PostEditor from '../components/PostEditor';
-import { Post, User } from '../services/api';
-
-interface Hashtag {
-  _id: string;
-  name: string;
-  description?: string;
-  postsCount: number;
-  followersCount: number;
-  isFollowing: boolean;
-  trending: boolean;
-  trendDirection: 'up' | 'down' | 'stable';
-  topPosts: Post[];
-  recentPosts: Post[];
-  mediaPosts: Post[];
-}
+import { hashtagsAPI, Hashtag, Post, searchAPI } from '../services/api';
 
 interface HashtagPageProps {
   currentUserId?: string;
@@ -47,116 +50,36 @@ const HashtagPage: React.FC<HashtagPageProps> = ({ currentUserId }) => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
   const [hashtag, setHashtag] = useState<Hashtag | null>(null);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showPostEditor, setShowPostEditor] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: ''
+  });
 
   const tabLabels = ['Top', 'Latest', 'Media', 'People'];
 
-  // Mock hashtag data for development
-  const mockHashtag: Hashtag = {
-    _id: '1',
-    name: hashtagName || 'react',
-    description: 'React is a JavaScript library for building user interfaces. Share your React projects, tips, and experiences!',
-    postsCount: 12500,
-    followersCount: 8900,
-    isFollowing: false,
-    trending: true,
-    trendDirection: 'up',
-    topPosts: [
-      {
-        _id: '1',
-        content: 'Just finished building an amazing React app with TypeScript! The new hooks are incredible. #react #typescript #webdev',
-        author: {
-          _id: '1',
-          username: 'johndoe',
-          firstName: 'John',
-          lastName: 'Doe',
-          email: 'john@example.com',
-          avatar: 'https://via.placeholder.com/40',
-          joinedDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 365).toISOString(),
-          isVerified: true,
-          isPrivate: false,
-          followersCount: 1200,
-          followingCount: 800,
-          postsCount: 45
-        },
-        hashtags: ['react', 'typescript', 'webdev'],
-        isPublic: true,
-        likes: 156,
-        comments: 23,
-        shares: 12,
-        isLiked: false,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-        updatedAt: new Date().toISOString()
-      },
-      {
-        _id: '2',
-        content: 'React 18 is a game changer! The new concurrent features are mind-blowing. #react #react18 #frontend',
-        author: {
-          _id: '2',
-          username: 'janedoe',
-          firstName: 'Jane',
-          lastName: 'Doe',
-          email: 'jane@example.com',
-          avatar: 'https://via.placeholder.com/40',
-          joinedDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 300).toISOString(),
-          isVerified: true,
-          isPrivate: false,
-          followersCount: 800,
-          followingCount: 600,
-          postsCount: 32
-        },
-        hashtags: ['react', 'react18', 'frontend'],
-        isPublic: true,
-        likes: 89,
-        comments: 15,
-        shares: 8,
-        isLiked: true,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    ],
-    recentPosts: [
-      {
-        _id: '3',
-        content: 'Learning React hooks today! useState and useEffect are so powerful. #react #hooks #learning',
-        author: {
-          _id: '3',
-          username: 'newbie',
-          firstName: 'New',
-          lastName: 'User',
-          email: 'newbie@example.com',
-          avatar: 'https://via.placeholder.com/40',
-          joinedDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
-          isVerified: false,
-          isPrivate: false,
-          followersCount: 15,
-          followingCount: 25,
-          postsCount: 3
-        },
-        hashtags: ['react', 'hooks', 'learning'],
-        isPublic: true,
-        likes: 12,
-        comments: 3,
-        shares: 1,
-        isLiked: false,
-        createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        updatedAt: new Date().toISOString()
-      }
-    ],
-    mediaPosts: []
-  };
-
   useEffect(() => {
     const fetchHashtagData = async () => {
+      if (!hashtagName) return;
+      
       try {
         setLoading(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setHashtag(mockHashtag);
-      } catch (err) {
-        setError('Failed to load hashtag data');
+        setError(null);
+        
+        // Fetch hashtag details
+        const hashtagData = await hashtagsAPI.getHashtag(hashtagName);
+        setHashtag(hashtagData);
+        
+        // Fetch posts with this hashtag
+        const postsData = await searchAPI.searchPosts(`#${hashtagName}`, 1, 10);
+        setPosts(postsData.posts);
+        
+      } catch (err: any) {
+        setError(err.message || 'Failed to load hashtag data');
         console.error('Hashtag error:', err);
       } finally {
         setLoading(false);
@@ -174,14 +97,29 @@ const HashtagPage: React.FC<HashtagPageProps> = ({ currentUserId }) => {
     if (!hashtag) return;
 
     try {
-      // TODO: Implement follow/unfollow hashtag API call
-      setHashtag(prev => prev ? {
-        ...prev,
-        isFollowing: !prev.isFollowing,
-        followersCount: prev.isFollowing ? prev.followersCount - 1 : prev.followersCount + 1
-      } : null);
-    } catch (err) {
+      setFollowLoading(true);
+      if (hashtag.isFollowing) {
+        await hashtagsAPI.unfollowHashtag(hashtag._id);
+        setHashtag(prev => prev ? {
+          ...prev,
+          isFollowing: false,
+          followersCount: prev.followersCount - 1
+        } : null);
+        setSnackbar({ open: true, message: 'Unfollowed hashtag' });
+      } else {
+        await hashtagsAPI.followHashtag(hashtag._id);
+        setHashtag(prev => prev ? {
+          ...prev,
+          isFollowing: true,
+          followersCount: prev.followersCount + 1
+        } : null);
+        setSnackbar({ open: true, message: 'Followed hashtag' });
+      }
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || 'Failed to follow/unfollow hashtag' });
       console.error('Follow hashtag error:', err);
+    } finally {
+      setFollowLoading(false);
     }
   };
 
@@ -258,8 +196,9 @@ const HashtagPage: React.FC<HashtagPageProps> = ({ currentUserId }) => {
           <Button
             variant={hashtag.isFollowing ? "outlined" : "contained"}
             onClick={handleFollow}
+            disabled={followLoading}
           >
-            {hashtag.isFollowing ? 'Following' : 'Follow'}
+            {followLoading ? <CircularProgress size={20} /> : (hashtag.isFollowing ? 'Following' : 'Follow')}
           </Button>
         </Box>
 
@@ -321,17 +260,17 @@ const HashtagPage: React.FC<HashtagPageProps> = ({ currentUserId }) => {
       {/* Tab Content */}
       {activeTab === 0 && (
         <Box>
-          {hashtag.topPosts.length === 0 ? (
+          {posts.length === 0 ? (
             <Box textAlign="center" py={4}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 No top posts yet
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Be the first to create a trending post with #{hashtag.name}
+                Be the first to create a trending post with #{hashtag?.name}
               </Typography>
             </Box>
           ) : (
-            hashtag.topPosts.map(post => (
+            posts.map((post: Post) => (
               <PostCard
                 key={post._id}
                 post={post}
@@ -347,17 +286,17 @@ const HashtagPage: React.FC<HashtagPageProps> = ({ currentUserId }) => {
 
       {activeTab === 1 && (
         <Box>
-          {hashtag.recentPosts.length === 0 ? (
+          {posts.length === 0 ? (
             <Box textAlign="center" py={4}>
               <Typography variant="h6" color="text.secondary" gutterBottom>
                 No recent posts
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Create a post with #{hashtag.name} to get started
+                Create a post with #{hashtag?.name} to get started
               </Typography>
             </Box>
           ) : (
-            hashtag.recentPosts.map(post => (
+            posts.map((post: Post) => (
               <PostCard
                 key={post._id}
                 post={post}
@@ -432,6 +371,16 @@ const HashtagPage: React.FC<HashtagPageProps> = ({ currentUserId }) => {
           />
         </Box>
       </Box>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ open: false, message: '' })}
+      >
+        <Alert onClose={() => setSnackbar({ open: false, message: '' })} severity="success">
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

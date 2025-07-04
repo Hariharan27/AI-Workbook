@@ -1,42 +1,46 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Box,
   Container,
   Typography,
+  Box,
   Avatar,
   Button,
+  Paper,
+  Grid,
+  Divider,
   Chip,
-  Tabs,
-  Tab,
-  Card,
-  CardContent,
   IconButton,
   Menu,
   MenuItem,
-  ListItemIcon,
-  ListItemText,
-  CircularProgress,
   Alert,
-  Skeleton
+  Snackbar,
+  Skeleton,
+  Tabs,
+  Tab,
+  ListItemIcon,
+  ListItemText
 } from '@mui/material';
 import {
   Edit,
   MoreVert,
   LocationOn,
+  Language,
   CalendarToday,
-  Link,
   People,
   PhotoLibrary,
+  Favorite,
+  Comment,
+  Share,
   Bookmark,
   Settings,
   Block,
   Flag
 } from '@mui/icons-material';
-import { useParams, useNavigate } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
 import PostCard from '../components/PostCard';
 import PostEditor from '../components/PostEditor';
-import { Post, User } from '../services/api';
-import { formatDistanceToNow } from 'date-fns';
+import { usersAPI, User, Post } from '../services/api';
 
 interface ProfilePageProps {
   currentUserId?: string;
@@ -52,96 +56,33 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
   const [error, setError] = useState<string | null>(null);
   const [showPostEditor, setShowPostEditor] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const [followLoading, setFollowLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+    open: false,
+    message: '',
+    severity: 'success'
+  });
 
   const tabLabels = ['Posts', 'Media', 'Likes', 'Saved'];
 
-  // Mock user data for development
-  const mockUser: User = {
-    _id: userId || '1',
-    username: 'johndoe',
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john@example.com',
-    avatar: 'https://via.placeholder.com/150',
-    coverImage: 'https://via.placeholder.com/800x200',
-    bio: 'Full-stack developer passionate about React, Node.js, and building amazing user experiences. 🚀',
-    location: 'San Francisco, CA',
-    website: 'https://johndoe.dev',
-    joinedDate: '2023-01-15T00:00:00.000Z',
-    isVerified: true,
-    isPrivate: false,
-    followersCount: 1250,
-    followingCount: 890,
-    postsCount: 45,
-    isFollowing: false,
-    isBlocked: false
-  };
-
-  // Mock posts data
-  const mockPosts: Post[] = [
-    {
-      _id: '1',
-      content: 'Just finished implementing the new feed system! 🚀 #coding #react #typescript',
-      author: {
-        _id: mockUser._id,
-        username: mockUser.username,
-        firstName: mockUser.firstName,
-        lastName: mockUser.lastName,
-        email: mockUser.email,
-        avatar: mockUser.avatar,
-        joinedDate: mockUser.joinedDate,
-        isVerified: mockUser.isVerified,
-        isPrivate: mockUser.isPrivate,
-        followersCount: mockUser.followersCount,
-        followingCount: mockUser.followingCount,
-        postsCount: mockUser.postsCount
-      },
-      hashtags: ['coding', 'react', 'typescript'],
-      isPublic: true,
-      likes: 15,
-      comments: 5,
-      shares: 2,
-      isLiked: false,
-      createdAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      _id: '2',
-      content: 'Working on the IdeatorPechu project. The backend is looking great!',
-      author: {
-        _id: mockUser._id,
-        username: mockUser.username,
-        firstName: mockUser.firstName,
-        lastName: mockUser.lastName,
-        email: mockUser.email,
-        avatar: mockUser.avatar,
-        joinedDate: mockUser.joinedDate,
-        isVerified: mockUser.isVerified,
-        isPrivate: mockUser.isPrivate,
-        followersCount: mockUser.followersCount,
-        followingCount: mockUser.followingCount,
-        postsCount: mockUser.postsCount
-      },
-      isPublic: true,
-      likes: 8,
-      comments: 3,
-      shares: 1,
-      isLiked: true,
-      createdAt: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-  ];
-
   useEffect(() => {
     const fetchUserProfile = async () => {
+      if (!userId) return;
+      
       try {
         setLoading(true);
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setUser(mockUser);
-        setPosts(mockPosts);
-      } catch (err) {
-        setError('Failed to load user profile');
+        setError(null);
+        
+        // Fetch user profile
+        const userData = await usersAPI.getUser(userId);
+        setUser(userData);
+        
+        // Fetch user posts
+        const postsData = await usersAPI.getUserPosts(userId, 1, 10);
+        setPosts(postsData.posts);
+        
+      } catch (err: any) {
+        setError(err.message || 'Failed to load user profile');
         console.error('Profile error:', err);
       } finally {
         setLoading(false);
@@ -156,17 +97,32 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
   };
 
   const handleFollow = async () => {
-    if (!user) return;
+    if (!user || !currentUserId) return;
 
     try {
-      // TODO: Implement follow/unfollow API call
-      setUser(prev => prev ? {
-        ...prev,
-        isFollowing: !prev.isFollowing,
-        followersCount: prev.isFollowing ? prev.followersCount - 1 : prev.followersCount + 1
-      } : null);
-    } catch (err) {
+      setFollowLoading(true);
+      if (user.isFollowing) {
+        await usersAPI.unfollowUser(user._id);
+        setUser(prev => prev ? {
+          ...prev,
+          isFollowing: false,
+          followersCount: prev.followersCount - 1
+        } : null);
+        setSnackbar({ open: true, message: 'Unfollowed user', severity: 'success' });
+      } else {
+        await usersAPI.followUser(user._id);
+        setUser(prev => prev ? {
+          ...prev,
+          isFollowing: true,
+          followersCount: prev.followersCount + 1
+        } : null);
+        setSnackbar({ open: true, message: 'Followed user', severity: 'success' });
+      }
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || 'Failed to follow/unfollow user', severity: 'error' });
       console.error('Follow error:', err);
+    } finally {
+      setFollowLoading(false);
     }
   };
 
@@ -511,6 +467,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
           </>
         )}
       </Menu>
+
+             <Snackbar
+         open={snackbar.open}
+         autoHideDuration={6000}
+         onClose={() => setSnackbar({ ...snackbar, open: false })}
+         message={snackbar.message}
+       />
     </Container>
   );
 };

@@ -19,6 +19,7 @@ const hashtagRoutes = require('./routes/hashtags');
 const searchRoutes = require('./routes/search');
 const shareRoutes = require('./routes/shares');
 const moderationRoutes = require('./routes/moderation');
+const notificationRoutes = require('./routes/notifications');
 
 // Import middleware
 const { authenticate } = require('./middleware/authenticate');
@@ -172,7 +173,7 @@ app.get('/api/v1/feed', authenticate, async (req, res) => {
 // Protected routes (will be added in future phases)
 // app.use('/api/v1/users', authenticate, userRoutes);
 // app.use('/api/v1/messages', authenticate, messageRoutes);
-// app.use('/api/v1/notifications', authenticate, notificationRoutes);
+app.use('/api/v1/notifications', authenticate, notificationRoutes);
 // app.use('/api/v1/search', authenticate, searchRoutes);
 // app.use('/api/v1/media', authenticate, mediaRoutes);
 
