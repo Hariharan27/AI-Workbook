@@ -12,9 +12,21 @@ const redisClient = require('./config/redis');
 
 // Import routes
 const authRoutes = require('./routes/auth');
+const postRoutes = require('./routes/posts');
+const commentRoutes = require('./routes/comments');
+const likeRoutes = require('./routes/likes');
+const hashtagRoutes = require('./routes/hashtags');
+const searchRoutes = require('./routes/search');
+const shareRoutes = require('./routes/shares');
+const moderationRoutes = require('./routes/moderation');
 
 // Import middleware
 const { authenticate } = require('./middleware/authenticate');
+
+// Import models for feed functionality
+const Post = require('./models/Post');
+const Like = require('./models/Like');
+const Relationship = require('./models/Relationship');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -105,11 +117,67 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/posts', postRoutes);
+app.use('/api/v1/comments', commentRoutes);
+app.use('/api/v1/likes', likeRoutes);
+app.use('/api/v1/hashtags', hashtagRoutes);
+app.use('/api/v1/search', searchRoutes);
+app.use('/api/v1/shares', shareRoutes);
+app.use('/api/v1/moderation', moderationRoutes);
+
+// Feed route
+app.get('/api/v1/feed', authenticate, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { page = 1, limit = 20 } = req.query;
+    
+    // Get user's following list
+    const following = await Relationship.find({
+      follower: userId,
+      status: 'accepted'
+    }).select('following');
+    const followingIds = following.map(r => r.following);
+    
+    // Get feed posts
+    const posts = await Post.getFeedPosts(userId, followingIds, {
+      page: parseInt(page),
+      limit: parseInt(limit)
+    });
+    
+    // Check which posts are liked by current user
+    const postIds = posts.map(post => post._id);
+    const userLikes = await Like.find({
+      user: userId,
+      post: { $in: postIds },
+      type: 'post'
+    });
+    const likedPostIds = userLikes.map(like => like.post.toString());
+    
+    // Add isLiked property to posts
+    const postsWithLikes = posts.map(post => ({
+      ...post.toObject(),
+      isLiked: likedPostIds.includes(post._id.toString())
+    }));
+    
+    res.json({
+      success: true,
+      data: { posts: postsWithLikes },
+      message: 'Feed retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Feed retrieval error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'FEED_ERROR',
+        message: 'Failed to retrieve feed'
+      }
+    });
+  }
+});
 
 // Protected routes (will be added in future phases)
 // app.use('/api/v1/users', authenticate, userRoutes);
-// app.use('/api/v1/posts', authenticate, postRoutes);
-// app.use('/api/v1/comments', authenticate, commentRoutes);
 // app.use('/api/v1/messages', authenticate, messageRoutes);
 // app.use('/api/v1/notifications', authenticate, notificationRoutes);
 // app.use('/api/v1/search', authenticate, searchRoutes);
@@ -121,9 +189,16 @@ app.get('/', (req, res) => {
     success: true,
     message: 'Welcome to IdeatorPechu API',
     version: '1.0.0',
-    phase: '2A - User Management & Authentication',
+    phase: '2B - Content Management System',
     endpoints: {
       auth: '/api/v1/auth',
+      posts: '/api/v1/posts',
+      comments: '/api/v1/comments',
+      likes: '/api/v1/likes',
+      hashtags: '/api/v1/hashtags',
+      search: '/api/v1/search',
+      shares: '/api/v1/shares',
+      moderation: '/api/v1/moderation',
       health: '/health'
     },
     documentation: 'Coming soon...'

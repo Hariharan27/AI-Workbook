@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   CardContent,
@@ -15,6 +15,7 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import { useAuth } from '../../contexts/AuthContext';
 
 const schema = yup.object({
   email: yup.string().email('Please enter a valid email').required('Email is required'),
@@ -25,7 +26,7 @@ type LoginFormData = yup.InferType<typeof schema>;
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const [error, setError] = useState<string>('');
+  const { login, error: authError, isLoading, isAuthenticated, clearError } = useAuth();
   const [loading, setLoading] = useState<boolean>(false);
 
   const {
@@ -36,21 +37,26 @@ const LoginPage: React.FC = () => {
     resolver: yupResolver(schema),
   });
 
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  // Clear auth error when component mounts
+  useEffect(() => {
+    clearError();
+  }, []);
+
   const onSubmit = async (data: LoginFormData) => {
     setLoading(true);
-    setError('');
     
     try {
-      // TODO: Connect to backend API
-      console.log('Login data:', data);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Navigate to dashboard on success
-      navigate('/dashboard');
+      await login(data);
+      // Navigation will be handled by useEffect when isAuthenticated changes
     } catch (err) {
-      setError('Invalid email or password. Please try again.');
+      // Error is handled by auth context
     } finally {
       setLoading(false);
     }
@@ -109,9 +115,9 @@ const LoginPage: React.FC = () => {
 
           {/* Login Form */}
           <CardContent sx={{ padding: 4 }}>
-            {error && (
+            {authError && (
               <Alert severity="error" sx={{ marginBottom: 3 }}>
-                {error}
+                {authError}
               </Alert>
             )}
 
@@ -145,7 +151,7 @@ const LoginPage: React.FC = () => {
                 fullWidth
                 variant="contained"
                 size="large"
-                disabled={loading}
+                disabled={loading || isLoading}
                 sx={{
                   height: 48,
                   fontSize: '1.1rem',
@@ -153,7 +159,7 @@ const LoginPage: React.FC = () => {
                   marginBottom: 2,
                 }}
               >
-                {loading ? 'Signing In...' : 'Sign In'}
+                {loading || isLoading ? 'Signing In...' : 'Sign In'}
               </Button>
 
               <Box sx={{ textAlign: 'center', marginBottom: 3 }}>

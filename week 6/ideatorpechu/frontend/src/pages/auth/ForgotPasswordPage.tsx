@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   CardContent,
@@ -14,6 +14,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
+import { useAuth } from '../../contexts/AuthContext';
 
 const schema = yup.object({
   email: yup.string().email('Please enter a valid email').required('Email is required'),
@@ -22,7 +23,7 @@ const schema = yup.object({
 type ForgotPasswordFormData = yup.InferType<typeof schema>;
 
 const ForgotPasswordPage: React.FC = () => {
-  const [error, setError] = useState<string>('');
+  const { forgotPassword, error: authError, clearError } = useAuth();
   const [success, setSuccess] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -34,21 +35,21 @@ const ForgotPasswordPage: React.FC = () => {
     resolver: yupResolver(schema),
   });
 
+  // Clear auth error when component mounts
+  useEffect(() => {
+    clearError();
+  }, []);
+
   const onSubmit = async (data: ForgotPasswordFormData) => {
     setLoading(true);
-    setError('');
     setSuccess('');
     
     try {
-      // TODO: Connect to backend API
-      console.log('Forgot password data:', data);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      setSuccess('Password reset link has been sent to your email address.');
-    } catch (err) {
-      setError('Failed to send reset link. Please try again.');
+      const response = await forgotPassword(data);
+      setSuccess(response.message);
+    } catch (err: any) {
+      // Error is handled by auth context or local error handling
+      console.error('Forgot password error:', err);
     } finally {
       setLoading(false);
     }
@@ -107,9 +108,9 @@ const ForgotPasswordPage: React.FC = () => {
 
           {/* Form */}
           <CardContent sx={{ padding: 4 }}>
-            {error && (
+            {authError && (
               <Alert severity="error" sx={{ marginBottom: 3 }}>
-                {error}
+                {authError}
               </Alert>
             )}
 

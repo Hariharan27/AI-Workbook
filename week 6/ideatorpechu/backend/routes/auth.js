@@ -466,38 +466,22 @@ router.post('/reset-password', validateNewPassword, handleValidationErrors, asyn
   }
 });
 
-// GET /api/v1/auth/profile
-router.get('/profile', authenticate, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: {
-          code: 'USER_NOT_FOUND',
-          message: 'User not found'
-        }
-      });
-    }
-
-    res.json({
-      success: true,
-      data: {
-        user: user.getFullProfile()
-      },
-      message: 'Profile retrieved successfully'
-    });
-
-  } catch (error) {
-    console.error('Profile retrieval error:', error);
-    res.status(500).json({
+// GET /api/v1/auth/profile - Get current user's profile
+router.get('/profile', authenticate, (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({
       success: false,
       error: {
-        code: 'PROFILE_ERROR',
-        message: 'Failed to retrieve profile'
+        code: 'AUTH_REQUIRED',
+        message: 'Authentication required'
       }
     });
   }
+  res.json({
+    success: true,
+    data: { user: req.user.getFullProfile ? req.user.getFullProfile() : req.user },
+    message: 'User profile retrieved successfully'
+  });
 });
 
 // GET /api/v1/auth/verify-email

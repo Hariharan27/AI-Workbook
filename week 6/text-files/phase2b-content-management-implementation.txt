@@ -1,0 +1,933 @@
+📋 PHASE 2B: CONTENT MANAGEMENT SYSTEM IMPLEMENTATION
+=====================================================
+
+Project: IdeatorPechu Social Media Platform
+Phase: 2B - Content Management & Feed System
+Status: Planning Phase
+Created: [Current Date]
+
+🎯 PHASE 2B OVERVIEW
+====================
+
+Phase 2B focuses on building the core content management system that allows users to create, share, and interact with posts. This phase establishes the foundation for user-generated content and social interactions.
+
+Key Objectives:
+- Implement multi-type post creation (text, image, video)
+- Build media upload and management system
+- Create intelligent feed algorithm
+- Add social interactions (like, comment, share)
+- Implement hashtag and search functionality
+- Design responsive content UI components
+
+🏗 ARCHITECTURAL FOUNDATION
+==========================
+
+Building upon Phase 2A's authentication system, Phase 2B will implement:
+
+Backend Architecture:
+- Post CRUD operations with MongoDB
+- Media upload system with Cloudinary/AWS S3
+- Feed generation algorithm
+- Social interaction endpoints
+- Search and hashtag functionality
+- Content moderation system
+
+Frontend Architecture:
+- Post creation interface
+- Media upload components
+- Feed display with infinite scroll
+- Interactive post components
+- Search and hashtag UI
+- Content management dashboard
+
+📊 TECHNICAL REQUIREMENTS
+=========================
+
+Backend Requirements:
+- Express.js RESTful APIs for content management
+- MongoDB with Mongoose for data persistence
+- Cloudinary for media file management
+- Redis for caching feed data
+- JWT authentication (from Phase 2A)
+- File upload middleware (Multer)
+- Image processing (Sharp)
+
+Frontend Requirements:
+- React.js with TypeScript
+- Material-UI components
+- Infinite scroll for feed
+- Drag-and-drop file upload
+- Real-time updates (preparation for Phase 2C)
+- Responsive design for mobile/desktop
+
+Database Schema Extensions:
+- Post collection with media support
+- Comment collection with nested replies
+- Like collection for social interactions
+- Hashtag collection for trending topics
+- Media collection for file management
+
+🔧 IMPLEMENTATION ROADMAP
+=========================
+
+Week 1: Backend Foundation
+--------------------------
+Day 1-2: Database Schema Implementation
+- Create Post model with media support
+- Create Comment model with nested replies
+- Create Like model for social interactions
+- Create Hashtag model for trending topics
+- Set up proper indexes for performance
+
+Day 3-4: Media Upload System
+- Implement Cloudinary integration
+- Create media upload middleware
+- Add image processing and optimization
+- Set up file validation and security
+
+Day 5-7: Core Post APIs
+- POST /api/v1/posts - Create new post
+- GET /api/v1/posts/:id - Get single post
+- PUT /api/v1/posts/:id - Update post
+- DELETE /api/v1/posts/:id - Delete post
+- GET /api/v1/posts/user/:userId - Get user posts
+
+Week 2: Social Interactions
+---------------------------
+Day 1-3: Like System
+- POST /api/v1/posts/:id/like - Like/unlike post
+- GET /api/v1/posts/:id/likes - Get post likes
+- Update post stats (likesCount)
+
+Day 4-5: Comment System
+- POST /api/v1/posts/:id/comments - Add comment
+- GET /api/v1/posts/:id/comments - Get post comments
+- PUT /api/v1/comments/:id - Edit comment
+- DELETE /api/v1/comments/:id - Delete comment
+- POST /api/v1/comments/:id/like - Like comment
+
+Day 6-7: Share System
+- POST /api/v1/posts/:id/share - Share post
+- GET /api/v1/posts/:id/shares - Get post shares
+- Update post stats (sharesCount)
+
+Week 3: Feed Algorithm & Search
+-------------------------------
+Day 1-3: Feed Generation
+- GET /api/v1/feed - Get personalized feed
+- Implement feed algorithm (chronological + engagement)
+- Add pagination and infinite scroll support
+- Cache feed data in Redis
+
+Day 4-5: Hashtag System
+- Extract hashtags from post content
+- POST /api/v1/hashtags - Create hashtag
+- GET /api/v1/hashtags/:tag - Get hashtag posts
+- GET /api/v1/hashtags/trending - Get trending hashtags
+
+Day 6-7: Search Functionality
+- GET /api/v1/search/posts - Search posts
+- GET /api/v1/search/users - Search users
+- GET /api/v1/search/hashtags - Search hashtags
+- Implement full-text search with MongoDB
+
+Week 4: Frontend Integration
+----------------------------
+Day 1-3: Post Creation Interface
+- Create post creation form
+- Implement media upload with drag-and-drop
+- Add hashtag suggestions
+- Create post preview component
+
+Day 4-5: Feed Display
+- Implement infinite scroll feed
+- Create post card components
+- Add like, comment, share buttons
+- Implement post interactions
+
+Day 6-7: Search & Discovery
+- Create search interface
+- Implement hashtag pages
+- Add trending hashtags sidebar
+- Create user discovery features
+
+📝 DETAILED IMPLEMENTATION SPECIFICATIONS
+=========================================
+
+1. POST MODEL SCHEMA
+--------------------
+```javascript
+const postSchema = new mongoose.Schema({
+  author: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: true, 
+    index: true 
+  },
+  content: { 
+    type: String, 
+    required: true, 
+    maxLength: 5000 
+  },
+  media: [{
+    type: { 
+      type: String, 
+      enum: ['image', 'video'], 
+      required: true 
+    },
+    url: { 
+      type: String, 
+      required: true 
+    },
+    thumbnail: { 
+      type: String 
+    },
+    metadata: {
+      size: { type: Number },
+      duration: { type: Number }, // for videos
+      dimensions: { width: Number, height: Number }
+    }
+  }],
+  hashtags: [{ 
+    type: String, 
+    index: true 
+  }],
+  mentions: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User' 
+  }],
+  location: {
+    type: { 
+      type: String, 
+      default: 'Point' 
+    },
+    coordinates: [Number] // [longitude, latitude]
+  },
+  isPublic: { 
+    type: Boolean, 
+    default: true 
+  },
+  isEdited: { 
+    type: Boolean, 
+    default: false 
+  },
+  editHistory: [{
+    content: String,
+    editedAt: { 
+      type: Date, 
+      default: Date.now 
+    }
+  }],
+  stats: {
+    likesCount: { 
+      type: Number, 
+      default: 0 
+    },
+    commentsCount: { 
+      type: Number, 
+      default: 0 
+    },
+    sharesCount: { 
+      type: Number, 
+      default: 0 
+    },
+    viewsCount: { 
+      type: Number, 
+      default: 0 
+    }
+  },
+  moderation: {
+    status: { 
+      type: String, 
+      enum: ['pending', 'approved', 'rejected'], 
+      default: 'pending' 
+    },
+    flagged: { 
+      type: Boolean, 
+      default: false 
+    },
+    flaggedBy: [{ 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: 'User' 
+    }]
+  }
+}, {
+  timestamps: true
+});
+```
+
+2. COMMENT MODEL SCHEMA
+-----------------------
+```javascript
+const commentSchema = new mongoose.Schema({
+  post: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Post', 
+    required: true, 
+    index: true 
+  },
+  author: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: true 
+  },
+  content: { 
+    type: String, 
+    required: true, 
+    maxLength: 1000 
+  },
+  parentComment: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Comment' 
+  }, // for nested comments
+  mentions: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User' 
+  }],
+  likes: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User' 
+  }],
+  isEdited: { 
+    type: Boolean, 
+    default: false 
+  },
+  editHistory: [{
+    content: String,
+    editedAt: { 
+      type: Date, 
+      default: Date.now 
+    }
+  }]
+}, {
+  timestamps: true
+});
+```
+
+3. LIKE MODEL SCHEMA
+--------------------
+```javascript
+const likeSchema = new mongoose.Schema({
+  user: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: true 
+  },
+  post: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Post' 
+  },
+  comment: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Comment' 
+  },
+  type: { 
+    type: String, 
+    enum: ['post', 'comment'], 
+    required: true 
+  }
+}, {
+  timestamps: true
+});
+```
+
+4. HASHTAG MODEL SCHEMA
+-----------------------
+```javascript
+const hashtagSchema = new mongoose.Schema({
+  name: { 
+    type: String, 
+    required: true, 
+    unique: true, 
+    lowercase: true 
+  },
+  postsCount: { 
+    type: Number, 
+    default: 0 
+  },
+  followersCount: { 
+    type: Number, 
+    default: 0 
+  },
+  isTrending: { 
+    type: Boolean, 
+    default: false 
+  },
+  lastUsed: { 
+    type: Date, 
+    default: Date.now 
+  }
+}, {
+  timestamps: true
+});
+```
+
+🔌 API ENDPOINTS SPECIFICATION
+==============================
+
+1. POST MANAGEMENT ENDPOINTS
+----------------------------
+```javascript
+// Create new post
+POST /api/v1/posts
+Content-Type: multipart/form-data
+{
+  content: "string",
+  media: [files],
+  hashtags: ["string"],
+  mentions: ["userId"],
+  location: { coordinates: [Number, Number] },
+  isPublic: boolean
+}
+
+// Get single post
+GET /api/v1/posts/:postId
+
+// Update post
+PUT /api/v1/posts/:postId
+{
+  content: "string",
+  hashtags: ["string"],
+  isPublic: boolean
+}
+
+// Delete post
+DELETE /api/v1/posts/:postId
+
+// Get user posts
+GET /api/v1/posts/user/:userId
+Query: limit, offset, type
+
+// Get personalized feed
+GET /api/v1/feed
+Query: limit, offset, type
+```
+
+2. COMMENT MANAGEMENT ENDPOINTS
+-------------------------------
+```javascript
+// Add comment to post
+POST /api/v1/posts/:postId/comments
+{
+  content: "string",
+  parentComment: "commentId" // for replies
+}
+
+// Get post comments
+GET /api/v1/posts/:postId/comments
+Query: limit, offset, sort
+
+// Update comment
+PUT /api/v1/comments/:commentId
+{
+  content: "string"
+}
+
+// Delete comment
+DELETE /api/v1/comments/:commentId
+
+// Like/unlike comment
+POST /api/v1/comments/:commentId/like
+```
+
+3. LIKE MANAGEMENT ENDPOINTS
+----------------------------
+```javascript
+// Like/unlike post
+POST /api/v1/posts/:postId/like
+
+// Get post likes
+GET /api/v1/posts/:postId/likes
+Query: limit, offset
+
+// Like/unlike comment
+POST /api/v1/comments/:commentId/like
+
+// Get comment likes
+GET /api/v1/comments/:commentId/likes
+Query: limit, offset
+```
+
+4. HASHTAG ENDPOINTS
+--------------------
+```javascript
+// Get trending hashtags
+GET /api/v1/hashtags/trending
+Query: limit
+
+// Get hashtag posts
+GET /api/v1/hashtags/:hashtag
+Query: limit, offset
+
+// Search hashtags
+GET /api/v1/hashtags/search
+Query: q, limit
+```
+
+5. SEARCH ENDPOINTS
+-------------------
+```javascript
+// Search posts
+GET /api/v1/search/posts
+Query: q, limit, offset, type
+
+// Search users
+GET /api/v1/search/users
+Query: q, limit, offset
+
+// Search hashtags
+GET /api/v1/search/hashtags
+Query: q, limit
+```
+
+6. MEDIA UPLOAD ENDPOINTS
+-------------------------
+```javascript
+// Upload media for post
+POST /api/v1/media/upload
+Content-Type: multipart/form-data
+{
+  file: File,
+  type: "image|video"
+}
+
+// Delete media
+DELETE /api/v1/media/:mediaId
+```
+
+🎨 FRONTEND COMPONENT SPECIFICATIONS
+====================================
+
+1. POST CREATION COMPONENTS
+---------------------------
+```typescript
+// PostCreationForm.tsx
+interface PostCreationFormProps {
+  onSubmit: (postData: PostData) => void;
+  onCancel: () => void;
+}
+
+interface PostData {
+  content: string;
+  media: File[];
+  hashtags: string[];
+  mentions: string[];
+  location?: { coordinates: [number, number] };
+  isPublic: boolean;
+}
+
+// MediaUpload.tsx
+interface MediaUploadProps {
+  onUpload: (files: File[]) => void;
+  maxFiles: number;
+  acceptedTypes: string[];
+  maxSize: number;
+}
+
+// HashtagInput.tsx
+interface HashtagInputProps {
+  value: string[];
+  onChange: (hashtags: string[]) => void;
+  suggestions: string[];
+}
+```
+
+2. FEED COMPONENTS
+------------------
+```typescript
+// Feed.tsx
+interface FeedProps {
+  posts: Post[];
+  loading: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
+}
+
+// PostCard.tsx
+interface PostCardProps {
+  post: Post;
+  onLike: (postId: string) => void;
+  onComment: (postId: string, comment: string) => void;
+  onShare: (postId: string) => void;
+  onDelete: (postId: string) => void;
+}
+
+// CommentSection.tsx
+interface CommentSectionProps {
+  postId: string;
+  comments: Comment[];
+  onAddComment: (comment: string) => void;
+  onLikeComment: (commentId: string) => void;
+}
+```
+
+3. SEARCH COMPONENTS
+--------------------
+```typescript
+// SearchBar.tsx
+interface SearchBarProps {
+  onSearch: (query: string) => void;
+  placeholder: string;
+  suggestions: string[];
+}
+
+// SearchResults.tsx
+interface SearchResultsProps {
+  results: SearchResult[];
+  type: 'posts' | 'users' | 'hashtags';
+  loading: boolean;
+}
+
+// HashtagPage.tsx
+interface HashtagPageProps {
+  hashtag: string;
+  posts: Post[];
+  loading: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
+}
+```
+
+🔄 FEED ALGORITHM SPECIFICATION
+================================
+
+1. FEED GENERATION LOGIC
+------------------------
+```javascript
+// Feed Algorithm Implementation
+const generateFeed = async (userId, limit = 20, offset = 0) => {
+  const user = await User.findById(userId);
+  const following = await Relationship.find({ 
+    follower: userId, 
+    status: 'accepted' 
+  }).select('following');
+  
+  const followingIds = following.map(r => r.following);
+  followingIds.push(userId); // Include user's own posts
+  
+  // Get posts from followed users
+  const posts = await Post.find({
+    author: { $in: followingIds },
+    isPublic: true,
+    'moderation.status': 'approved'
+  })
+  .populate('author', 'username firstName lastName avatar')
+  .populate('stats')
+  .sort({ 
+    // Hybrid sorting: engagement + recency
+    $expr: {
+      $add: [
+        { $multiply: ['$stats.likesCount', 2] },
+        { $multiply: ['$stats.commentsCount', 3] },
+        { $multiply: ['$stats.sharesCount', 4] },
+        { $divide: [{ $subtract: [new Date(), '$createdAt'] }, 1000 * 60 * 60] } // hours since creation
+      ]
+    }
+  })
+  .limit(limit)
+  .skip(offset);
+  
+  return posts;
+};
+```
+
+2. CACHING STRATEGY
+-------------------
+```javascript
+// Redis Caching for Feed
+const cacheFeed = async (userId, posts) => {
+  const key = `feed:${userId}`;
+  await redis.setex(key, 300, JSON.stringify(posts)); // 5 minutes cache
+};
+
+const getCachedFeed = async (userId) => {
+  const key = `feed:${userId}`;
+  const cached = await redis.get(key);
+  return cached ? JSON.parse(cached) : null;
+};
+```
+
+🔒 SECURITY & VALIDATION
+=========================
+
+1. CONTENT VALIDATION
+---------------------
+```javascript
+// Post validation middleware
+const validatePost = [
+  body('content')
+    .isLength({ min: 1, max: 5000 })
+    .withMessage('Post content must be between 1 and 5000 characters'),
+  body('hashtags')
+    .isArray({ max: 30 })
+    .withMessage('Maximum 30 hashtags allowed'),
+  body('hashtags.*')
+    .matches(/^#[a-zA-Z0-9_]+$/)
+    .withMessage('Invalid hashtag format'),
+  body('isPublic')
+    .isBoolean()
+    .withMessage('isPublic must be a boolean')
+];
+
+// Media validation
+const validateMedia = (req, res, next) => {
+  if (!req.files || req.files.length === 0) {
+    return next();
+  }
+  
+  const maxSize = 10 * 1024 * 1024; // 10MB
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4'];
+  
+  for (const file of req.files) {
+    if (file.size > maxSize) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'File size too large' }
+      });
+    }
+    
+    if (!allowedTypes.includes(file.mimetype)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Invalid file type' }
+      });
+    }
+  }
+  
+  next();
+};
+```
+
+2. AUTHORIZATION CHECKS
+-----------------------
+```javascript
+// Post ownership middleware
+const checkPostOwnership = async (req, res, next) => {
+  const post = await Post.findById(req.params.postId);
+  if (!post) {
+    return res.status(404).json({
+      success: false,
+      error: { message: 'Post not found' }
+    });
+  }
+  
+  if (post.author.toString() !== req.user.userId) {
+    return res.status(403).json({
+      success: false,
+      error: { message: 'Not authorized to modify this post' }
+    });
+  }
+  
+  req.post = post;
+  next();
+};
+```
+
+📊 PERFORMANCE OPTIMIZATION
+===========================
+
+1. DATABASE INDEXES
+-------------------
+```javascript
+// Post indexes
+postSchema.index({ author: 1, createdAt: -1 });
+postSchema.index({ hashtags: 1 });
+postSchema.index({ 'moderation.status': 1 });
+postSchema.index({ location: '2dsphere' });
+
+// Comment indexes
+commentSchema.index({ post: 1, createdAt: -1 });
+commentSchema.index({ author: 1, createdAt: -1 });
+
+// Like indexes
+likeSchema.index({ user: 1, post: 1 }, { unique: true });
+likeSchema.index({ user: 1, comment: 1 }, { unique: true });
+
+// Hashtag indexes
+hashtagSchema.index({ name: 1 }, { unique: true });
+hashtagSchema.index({ postsCount: -1 });
+```
+
+2. QUERY OPTIMIZATION
+---------------------
+```javascript
+// Optimized post queries with population
+const getPostWithDetails = async (postId) => {
+  return await Post.findById(postId)
+    .populate('author', 'username firstName lastName avatar isVerified')
+    .populate('comments', 'content author createdAt')
+    .populate('likes', 'user')
+    .lean(); // Use lean() for read-only queries
+};
+
+// Pagination with cursor-based approach
+const getPostsWithCursor = async (cursor, limit = 20) => {
+  const query = cursor ? { _id: { $lt: cursor } } : {};
+  return await Post.find(query)
+    .sort({ _id: -1 })
+    .limit(limit + 1) // Get one extra to check if more exists
+    .populate('author', 'username firstName lastName avatar');
+};
+```
+
+🎯 SUCCESS METRICS
+==================
+
+Technical Metrics:
+- Post creation response time: < 2 seconds
+- Feed loading time: < 1 second
+- Media upload success rate: > 99%
+- Search response time: < 500ms
+- API uptime: > 99.9%
+
+Feature Metrics:
+- User engagement: 70% of users create at least one post
+- Content creation: 5+ posts per active user per month
+- Interaction rate: 15%+ like/comment rate on posts
+- Search usage: 60%+ of users use search functionality
+- Hashtag usage: 40%+ of posts include hashtags
+
+📋 TESTING STRATEGY
+===================
+
+1. UNIT TESTS
+-------------
+- Post CRUD operations
+- Comment functionality
+- Like/unlike operations
+- Hashtag extraction and processing
+- Media upload validation
+- Feed generation algorithm
+
+2. INTEGRATION TESTS
+--------------------
+- End-to-end post creation flow
+- Feed generation with multiple users
+- Search functionality across all types
+- Media upload and processing
+- Social interactions (like, comment, share)
+
+3. PERFORMANCE TESTS
+--------------------
+- Load testing for feed generation
+- Media upload stress testing
+- Search query performance
+- Database query optimization
+- Memory usage monitoring
+
+4. SECURITY TESTS
+-----------------
+- Content validation bypass attempts
+- Unauthorized post modifications
+- Media upload security
+- XSS and injection prevention
+- Rate limiting effectiveness
+
+🚀 DEPLOYMENT CONSIDERATIONS
+============================
+
+1. ENVIRONMENT SETUP
+--------------------
+- MongoDB Atlas for database
+- Cloudinary for media storage
+- Redis for caching
+- AWS S3 as backup storage
+- CDN for media delivery
+
+2. MONITORING
+-------------
+- Application performance monitoring
+- Database query monitoring
+- Media upload success tracking
+- User engagement analytics
+- Error tracking and alerting
+
+3. SCALABILITY
+--------------
+- Horizontal scaling for API servers
+- Database read replicas
+- CDN for global media delivery
+- Caching layers for feed data
+- Queue system for background jobs
+
+📝 IMPLEMENTATION CHECKLIST
+===========================
+
+Backend Implementation:
+□ Create Post model with full schema
+□ Create Comment model with nested replies
+□ Create Like model for social interactions
+□ Create Hashtag model for trending topics
+□ Implement media upload with Cloudinary
+□ Create post CRUD endpoints
+□ Implement comment system
+□ Add like/unlike functionality
+□ Create feed generation algorithm
+□ Implement hashtag system
+□ Add search functionality
+□ Set up proper database indexes
+□ Implement content validation
+□ Add authorization middleware
+□ Set up Redis caching
+□ Create comprehensive tests
+
+Frontend Implementation:
+□ Create post creation form
+□ Implement media upload component
+□ Add hashtag input with suggestions
+□ Create post card component
+□ Implement infinite scroll feed
+□ Add like, comment, share buttons
+□ Create comment section component
+□ Implement search interface
+□ Add hashtag pages
+□ Create trending hashtags sidebar
+□ Add post editing functionality
+□ Implement post deletion
+□ Add responsive design
+□ Create loading states
+□ Add error handling
+
+Integration & Testing:
+□ Connect frontend to backend APIs
+□ Test complete post creation flow
+□ Verify feed generation and display
+□ Test social interactions
+□ Validate search functionality
+□ Test media upload and display
+□ Verify hashtag system
+□ Test responsive design
+□ Performance testing
+□ Security testing
+□ User acceptance testing
+
+Documentation:
+□ API documentation
+□ Component documentation
+□ Database schema documentation
+□ Deployment guide
+□ User guide for content creation
+
+🎉 PHASE 2B COMPLETION CRITERIA
+================================
+
+Phase 2B will be considered complete when:
+
+1. Users can create posts with text and media
+2. Feed displays posts from followed users
+3. Users can like, comment, and share posts
+4. Hashtag system is fully functional
+5. Search works across posts, users, and hashtags
+6. Media upload and display works seamlessly
+7. All features are responsive and mobile-friendly
+8. Performance meets specified metrics
+9. Security measures are in place
+10. Comprehensive testing is completed
+
+This foundation will enable Phase 2C (Real-Time Communication) and Phase 2D (Advanced Features) to build upon a solid content management system.
+
+---
+Created: [Current Date]
+Project: IdeatorPechu Social Media Platform
+Phase: 2B - Content Management System
+Status: Ready for Implementation 
