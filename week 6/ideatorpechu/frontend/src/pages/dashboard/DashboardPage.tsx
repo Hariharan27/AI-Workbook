@@ -99,9 +99,9 @@ const DashboardPage: React.FC = () => {
 
           {/* User stats */}
           <Box sx={{ display: 'flex', gap: 2, marginBottom: 4, justifyContent: 'center' }}>
-            <Chip label={`${user?.stats?.followersCount || 0} Followers`} color="primary" />
-            <Chip label={`${user?.stats?.followingCount || 0} Following`} color="secondary" />
-            <Chip label={`${user?.stats?.postsCount || 0} Posts`} color="info" />
+            <Chip label={`0 Followers`} color="primary" />
+            <Chip label={`0 Following`} color="secondary" />
+            <Chip label={`0 Posts`} color="info" />
           </Box>
 
           {/* Main content */}

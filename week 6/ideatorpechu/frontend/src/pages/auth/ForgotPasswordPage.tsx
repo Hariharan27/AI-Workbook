@@ -45,7 +45,7 @@ const ForgotPasswordPage: React.FC = () => {
     setSuccess('');
     
     try {
-      const response = await forgotPassword(data);
+      const response = await forgotPassword(data.email);
       setSuccess(response.message);
     } catch (err: any) {
       // Error is handled by auth context or local error handling

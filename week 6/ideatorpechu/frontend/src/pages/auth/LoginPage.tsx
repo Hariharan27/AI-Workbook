@@ -53,7 +53,7 @@ const LoginPage: React.FC = () => {
     setLoading(true);
     
     try {
-      await login(data);
+      await login(data.email, data.password);
       // Navigation will be handled by useEffect when isAuthenticated changes
     } catch (err) {
       // Error is handled by auth context

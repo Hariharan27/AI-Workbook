@@ -11,7 +11,7 @@ const router = express.Router();
 // Rate limiting for authentication routes
 const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 requests per windowMs
+  max: 50, // 50 requests per windowMs (increased for development)
   message: {
     success: false,
     error: {
