@@ -66,18 +66,37 @@ export interface User {
   firstName: string;
   lastName: string;
   email: string;
-      avatar?: string;
+  avatar?: string;
   coverImage?: string;
-      bio?: string;
+  bio?: string;
   location?: string;
   website?: string;
   dateOfBirth?: string;
-  joinedDate: string;
-      isVerified: boolean;
-      isPrivate: boolean;
-        followersCount: number;
-        followingCount: number;
-        postsCount: number;
+  isVerified: boolean;
+  isPrivate: boolean;
+  isActive: boolean;
+  lastSeen: string;
+  stats?: {
+    followersCount: number;
+    followingCount: number;
+    postsCount: number;
+    profileViews: number;
+  };
+  preferences?: {
+    notifications: {
+      email: boolean;
+      push: boolean;
+      sms: boolean;
+    };
+    privacy: {
+      profileVisibility: 'public' | 'friends' | 'private';
+      allowMessages: 'everyone' | 'friends' | 'none';
+    };
+    language: 'en' | 'ta' | 'hi';
+    theme: 'light' | 'dark' | 'auto';
+  };
+  createdAt: string;
+  updatedAt: string;
   isFollowing?: boolean;
   isBlocked?: boolean;
 }
@@ -91,9 +110,12 @@ export interface Post {
   mentions?: User[];
   location?: string;
   isPublic: boolean;
-  likes: number;
-  comments: number;
-  shares: number;
+  stats: {
+    likesCount: number;
+    commentsCount: number;
+    sharesCount: number;
+    viewsCount: number;
+  };
   isLiked: boolean;
   createdAt: string;
   updatedAt: string;
@@ -106,7 +128,7 @@ export interface Comment {
   post: string;
   parentComment?: string;
   replies?: Comment[];
-  likes: number;
+  likes: string[]; // Array of user IDs who liked the comment
   isLiked: boolean;
   createdAt: string;
   updatedAt: string;
@@ -133,9 +155,12 @@ export interface SearchResult {
   content?: string;
   author?: User;
   hashtags?: string[];
-  likes?: number;
-  comments?: number;
-  shares?: number;
+  stats?: {
+    likesCount: number;
+    commentsCount: number;
+    sharesCount: number;
+    viewsCount: number;
+  };
   isLiked?: boolean;
   createdAt?: string;
   updatedAt?: string;
@@ -214,6 +239,28 @@ export const postsAPI = {
     };
   },
 
+  getTrendingPosts: async (page = 1, limit = 20): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { posts: Post[] }; message: string }> = await api.get('/posts/trending', {
+      params: { page, limit }
+    });
+    return {
+      posts: response.data.data.posts,
+      total: response.data.data.posts.length,
+      hasMore: response.data.data.posts.length === parseInt(limit.toString())
+    };
+  },
+
+  getFollowingPosts: async (page = 1, limit = 20): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { posts: Post[] }; message: string }> = await api.get('/posts/following', {
+      params: { page, limit }
+    });
+    return {
+      posts: response.data.data.posts,
+      total: response.data.data.posts.length,
+      hasMore: response.data.data.posts.length === parseInt(limit.toString())
+    };
+  },
+
   getPost: async (postId: string): Promise<Post> => {
     const response: AxiosResponse<{ success: boolean; data: { post: Post }; message: string }> = await api.get(`/posts/${postId}`);
     return response.data.data.post;
@@ -241,7 +288,7 @@ export const postsAPI = {
     
     if (postData.mentions) {
       postData.mentions.forEach(mention => formData.append('mentions[]', mention));
-}
+    }
 
     if (postData.location) {
       formData.append('location', postData.location);
@@ -277,6 +324,62 @@ export const postsAPI = {
 
 // Likes API
 export const likesAPI = {
+  // Primary method - use this for all like/unlike operations
+  togglePostLike: async (postId: string): Promise<{ isLiked: boolean; message: string }> => {
+    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean }; message: string }> = await api.post(`/likes/${postId}/toggle`, { type: 'post' });
+    return { 
+      isLiked: response.data.data.isLiked,
+      message: response.data.message 
+    };
+  },
+
+  toggleCommentLike: async (commentId: string): Promise<{ isLiked: boolean; message: string }> => {
+    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean }; message: string }> = await api.post(`/likes/${commentId}/toggle`, { type: 'comment' });
+    return { 
+      isLiked: response.data.data.isLiked,
+      message: response.data.message 
+    };
+  },
+
+  // Check like status
+  checkPostLike: async (postId: string): Promise<{ isLiked: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean } }> = await api.get(`/likes/check/${postId}`, {
+      params: { type: 'post' }
+    });
+    return { isLiked: response.data.data.isLiked };
+  },
+
+  checkCommentLike: async (commentId: string): Promise<{ isLiked: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean } }> = await api.get(`/likes/check/${commentId}`, {
+      params: { type: 'comment' }
+    });
+    return { isLiked: response.data.data.isLiked };
+  },
+
+  // Get likes list
+  getPostLikes: async (postId: string, page = 1, limit = 20): Promise<{ users: User[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { likes: any[]; pagination: any }; message: string }> = await api.get(`/likes/${postId}`, {
+      params: { type: 'post', page, limit }
+    });
+    return {
+      users: response.data.data.likes.map((like: any) => like.user),
+      total: response.data.data.pagination.total,
+      hasMore: response.data.data.pagination.hasNext
+    };
+  },
+
+  getCommentLikes: async (commentId: string, page = 1, limit = 20): Promise<{ users: User[]; total: number; hasMore: boolean }> => {
+    const response: AxiosResponse<{ success: boolean; data: { likes: any[]; pagination: any }; message: string }> = await api.get(`/likes/${commentId}`, {
+      params: { type: 'comment', page, limit }
+    });
+    return {
+      users: response.data.data.likes.map((like: any) => like.user),
+      total: response.data.data.pagination.total,
+      hasMore: response.data.data.pagination.hasNext
+    };
+  },
+
+  // Legacy methods for backward compatibility
   likePost: async (postId: string): Promise<{ message: string }> => {
     const response: AxiosResponse<{ success: boolean; message: string }> = await api.post(`/likes/${postId}`, { type: 'post' });
     return { message: response.data.message };
@@ -295,17 +398,6 @@ export const likesAPI = {
   unlikeComment: async (commentId: string): Promise<{ message: string }> => {
     const response: AxiosResponse<{ success: boolean; message: string }> = await api.delete(`/likes/${commentId}`, { data: { type: 'comment' } });
     return { message: response.data.message };
-  },
-
-  getPostLikes: async (postId: string, page = 1, limit = 20): Promise<{ users: User[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ success: boolean; data: { users: User[] }; message: string }> = await api.get(`/likes/${postId}`, {
-      params: { type: 'post', page, limit }
-    });
-    return {
-      users: response.data.data.users,
-      total: response.data.data.users.length,
-      hasMore: response.data.data.users.length === parseInt(limit.toString())
-    };
   }
 };
 
@@ -342,7 +434,7 @@ export const sharesAPI = {
 // Comments API
 export const commentsAPI = {
   getComments: async (postId: string, page = 1, limit = 10): Promise<{ comments: Comment[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ success: boolean; data: { comments: Comment[] }; message: string }> = await api.get(`/comments/${postId}`, {
+    const response: AxiosResponse<{ success: boolean; data: { comments: Comment[] }; message: string }> = await api.get(`/comments/post/${postId}`, {
       params: { page, limit }
     });
     return {

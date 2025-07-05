@@ -19,9 +19,10 @@ import { Add } from '@mui/icons-material';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import PostCard from '../components/PostCard';
 import PostEditor from '../components/PostEditor';
-import { useNavigate } from 'react-router-dom';
+import CommentSection from '../components/CommentSection';
 import { postsAPI, likesAPI, sharesAPI } from '../services/api';
 import { Post } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 interface FeedPageProps {
   currentUserId?: string;
@@ -30,7 +31,7 @@ interface FeedPageProps {
 }
 
 const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setShowPostEditor }) => {
-  const navigate = useNavigate();
+  const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,12 +39,17 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
   const [hasMore, setHasMore] = useState(true);
   const [page, setPage] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
 
   // State for notifications
-  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'info' | 'warning';
+  }>({
     open: false,
     message: '',
-    severity: 'success'
+    severity: 'info'
   });
 
   // Real API call to fetch posts
@@ -52,8 +58,25 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
       setLoading(true);
       setError(null);
       
-      // Call the backend feed API
-      const response = await postsAPI.getFeed(pageNum, 20);
+      let response: { posts: Post[]; total: number; hasMore: boolean };
+      
+      // Call different API endpoints based on the filter
+      switch (filter) {
+        case 'latest':
+          // Latest: Get feed (includes your posts + posts from people you follow)
+          response = await postsAPI.getFeed(pageNum, 20);
+          break;
+        case 'trending':
+          // Trending: Get trending posts based on engagement
+          response = await postsAPI.getTrendingPosts(pageNum, 20);
+          break;
+        case 'following':
+          // Following: Get posts only from people you follow
+          response = await postsAPI.getFollowingPosts(pageNum, 20);
+          break;
+        default:
+          response = await postsAPI.getFeed(pageNum, 20);
+      }
       
       if (pageNum === 1) {
         setPosts(response.posts);
@@ -100,41 +123,58 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
       const post = posts.find(p => p._id === postId);
       if (!post) return;
 
-      if (post.isLiked) {
-        await likesAPI.unlikePost(postId);
-      } else {
-        await likesAPI.likePost(postId);
-      }
+      // Use the new toggle API
+      const result = await likesAPI.togglePostLike(postId);
 
-      // Update local state
+      // Update local state based on the response
       setPosts(prev => prev.map(p => 
         p._id === postId 
           ? { 
               ...p, 
-              isLiked: !p.isLiked, 
-              likes: p.isLiked ? p.likes - 1 : p.likes + 1 
+              isLiked: result.isLiked, 
+              stats: {
+                ...p.stats,
+                likesCount: result.isLiked ? p.stats.likesCount + 1 : p.stats.likesCount - 1
+              }
             }
           : p
       ));
 
       setSnackbar({
         open: true,
-        message: post.isLiked ? 'Post unliked' : 'Post liked!',
+        message: result.message,
         severity: 'success'
       });
     } catch (err: any) {
-      console.error('Error liking post:', err);
-      setSnackbar({
-        open: true,
-        message: err.response?.data?.message || 'Failed to like post',
-        severity: 'error'
-      });
+      console.error('Error toggling post like:', err);
+      
+      // Handle specific error cases
+      if (err.response?.status === 409) {
+        // Already liked error - this shouldn't happen with toggle, but handle gracefully
+        setSnackbar({
+          open: true,
+          message: 'Like status updated',
+          severity: 'info'
+        });
+      } else {
+        setSnackbar({
+          open: true,
+          message: err.response?.data?.message || 'Failed to update like',
+          severity: 'error'
+        });
+      }
     }
   };
 
   const handleComment = (postId: string) => {
-    // TODO: Navigate to post detail or open comment modal
-    navigate(`/post/${postId}`);
+    // Toggle comment section visibility
+    const newExpanded = new Set(expandedComments);
+    if (newExpanded.has(postId)) {
+      newExpanded.delete(postId);
+    } else {
+      newExpanded.add(postId);
+    }
+    setExpandedComments(newExpanded);
   };
 
   const handleShare = async (postId: string) => {
@@ -144,7 +184,13 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
       // Update local state
       setPosts(prev => prev.map(p => 
         p._id === postId 
-          ? { ...p, shares: p.shares + 1 }
+          ? { 
+              ...p, 
+              stats: {
+                ...p.stats,
+                sharesCount: p.stats.sharesCount + 1
+              }
+            }
           : p
       ));
 
@@ -164,8 +210,8 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
   };
 
   const handleEdit = (postId: string) => {
-    // TODO: Navigate to edit page or open edit modal
-    navigate(`/post/${postId}/edit`);
+    // TODO: Open edit modal
+    console.log('Edit post:', postId);
   };
 
   const handleDelete = async (postId: string) => {
@@ -305,17 +351,39 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
             }
           >
             {posts.map((post) => (
-              <PostCard
-                key={post._id}
-                post={post}
-                onLike={handleLike}
-                onComment={handleComment}
-                onShare={handleShare}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                onReport={handleReport}
-                currentUserId={currentUserId}
-              />
+              <Box key={post._id}>
+                <PostCard
+                  post={post}
+                  onLike={handleLike}
+                  onComment={handleComment}
+                  onShare={handleShare}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onReport={handleReport}
+                  currentUserId={currentUserId}
+                />
+                {expandedComments.has(post._id) && (
+                  <CommentSection
+                    postId={post._id}
+                    currentUserId={currentUserId}
+                    currentUser={currentUser}
+                    onCommentAdded={() => {
+                      // Refresh the post to update comment count
+                      setPosts(prev => prev.map(p => 
+                        p._id === post._id 
+                          ? { 
+                              ...p, 
+                              stats: {
+                                ...p.stats,
+                                commentsCount: p.stats.commentsCount + 1
+                              }
+                            }
+                          : p
+                      ));
+                    }}
+                  />
+                )}
+              </Box>
             ))}
           </InfiniteScroll>
         )}

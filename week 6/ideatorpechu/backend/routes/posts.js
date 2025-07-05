@@ -169,6 +169,252 @@ router.post('/',
   }
 );
 
+// GET /api/v1/posts/trending - Get trending posts (ONLY posts with engagement)
+router.get('/trending', authenticate, async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const userId = req.user._id;
+
+    console.log(`[TRENDING] userId: ${userId}, page: ${page}, limit: ${limit}`);
+
+    // Get ONLY posts with engagement (likes, comments, or shares)
+    const posts = await Post.aggregate([
+      {
+        $match: {
+          isPublic: true,
+          'moderation.status': 'approved',
+          $or: [
+            { 'stats.likesCount': { $gt: 0 } },
+            { 'stats.commentsCount': { $gt: 0 } },
+            { 'stats.sharesCount': { $gt: 0 } }
+          ]
+        }
+      },
+      {
+        $addFields: {
+          // Calculate trending score based on engagement and recency
+          trendingScore: {
+            $add: [
+              { $multiply: ['$stats.likesCount', 3] },
+              { $multiply: ['$stats.commentsCount', 5] },
+              { $multiply: ['$stats.sharesCount', 7] },
+              { $multiply: ['$stats.viewsCount', 0.1] },
+              // Time decay factor (newer posts get higher score)
+              {
+                $multiply: [
+                  {
+                    $divide: [
+                      { $subtract: [new Date(), '$createdAt'] },
+                      1000 * 60 * 60 * 24 // Convert to days
+                    ]
+                  },
+                  -1 // Penalty for older posts
+                ]
+              }
+            ]
+          }
+        }
+      },
+      {
+        $sort: { trendingScore: -1, createdAt: -1 }
+      },
+      {
+        $limit: parseInt(limit) + (parseInt(page) - 1) * parseInt(limit)
+      },
+      {
+        $skip: (parseInt(page) - 1) * parseInt(limit)
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'author',
+          foreignField: '_id',
+          as: 'author'
+        }
+      },
+      {
+        $unwind: '$author'
+      },
+      {
+        $project: {
+          _id: 1,
+          content: 1,
+          media: 1,
+          hashtags: 1,
+          mentions: 1,
+          location: 1,
+          isPublic: 1,
+          isEdited: 1,
+          editHistory: 1,
+          stats: 1,
+          moderation: 1,
+          isShared: 1,
+          originalPost: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          trendingScore: 1,
+          author: {
+            _id: 1,
+            username: 1,
+            firstName: 1,
+            lastName: 1,
+            avatar: 1,
+            isVerified: 1
+          }
+        }
+      }
+    ]);
+
+    console.log(`[TRENDING] Found ${posts.length} posts with engagement`);
+
+    // Check which posts are liked by current user
+    const postIds = posts.map(post => post._id);
+    const userLikes = await Like.find({
+      user: userId,
+      post: { $in: postIds },
+      type: 'post'
+    });
+
+    const likedPostIds = userLikes.map(like => like.post.toString());
+
+    // Add isLiked property to posts
+    const postsWithLikes = posts.map(post => ({
+      ...post,
+      isLiked: likedPostIds.includes(post._id.toString())
+    }));
+
+    res.json({
+      success: true,
+      data: { posts: postsWithLikes },
+      message: 'Trending posts retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('[TRENDING] Trending posts retrieval error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'TRENDING_POSTS_ERROR',
+        message: 'Failed to retrieve trending posts',
+        details: error.message
+      }
+    });
+  }
+});
+
+// GET /api/v1/posts/following - Get posts from people you follow (EXCLUDING your own posts)
+router.get('/following', authenticate, async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { page = 1, limit = 20 } = req.query;
+
+    console.log(`[FOLLOWING] userId: ${userId}, page: ${page}, limit: ${limit}`);
+
+    // Get user's following list
+    const following = await require('../models/Relationship').find({
+      follower: userId,
+      status: 'accepted'
+    }).select('following');
+
+    const followingIds = following.map(r => r.following);
+    console.log(`[FOLLOWING] followingIds:`, followingIds);
+
+    // Get posts from people you follow (EXCLUDING your own posts)
+    const posts = await Post.aggregate([
+      {
+        $match: {
+          author: { $in: followingIds },
+          author: { $ne: userId }, // Exclude user's own posts
+          isPublic: true,
+          'moderation.status': 'approved'
+        }
+      },
+      {
+        $sort: { createdAt: -1 }
+      },
+      {
+        $limit: parseInt(limit) + (parseInt(page) - 1) * parseInt(limit)
+      },
+      {
+        $skip: (parseInt(page) - 1) * parseInt(limit)
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'author',
+          foreignField: '_id',
+          as: 'author'
+        }
+      },
+      {
+        $unwind: '$author'
+      },
+      {
+        $project: {
+          _id: 1,
+          content: 1,
+          media: 1,
+          hashtags: 1,
+          mentions: 1,
+          location: 1,
+          isPublic: 1,
+          isEdited: 1,
+          editHistory: 1,
+          stats: 1,
+          moderation: 1,
+          isShared: 1,
+          originalPost: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          author: {
+            _id: 1,
+            username: 1,
+            firstName: 1,
+            lastName: 1,
+            avatar: 1,
+            isVerified: 1
+          }
+        }
+      }
+    ]);
+
+    console.log(`[FOLLOWING] Found ${posts.length} following posts`);
+
+    // Check which posts are liked by current user
+    const postIds = posts.map(post => post._id);
+    const userLikes = await Like.find({
+      user: userId,
+      post: { $in: postIds },
+      type: 'post'
+    });
+
+    const likedPostIds = userLikes.map(like => like.post.toString());
+
+    // Add isLiked property to posts
+    const postsWithLikes = posts.map(post => ({
+      ...post,
+      isLiked: likedPostIds.includes(post._id.toString())
+    }));
+
+    res.json({
+      success: true,
+      data: { posts: postsWithLikes },
+      message: 'Following posts retrieved successfully'
+    });
+
+  } catch (error) {
+    console.error('[FOLLOWING] Following posts retrieval error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'FOLLOWING_POSTS_ERROR',
+        message: 'Failed to retrieve following posts',
+        details: error.message
+      }
+    });
+  }
+});
+
 // GET /api/v1/posts/:postId - Get single post
 router.get('/:postId', authenticate, async (req, res) => {
   try {
@@ -211,7 +457,7 @@ router.get('/:postId', authenticate, async (req, res) => {
     res.json({
       success: true,
       data: { 
-        post: { ...post.toObject(), isLiked }
+        post: { ...post, isLiked }
       },
       message: 'Post retrieved successfully'
     });
@@ -440,41 +686,58 @@ router.get('/user/:userId', authenticate, async (req, res) => {
   }
 });
 
-// GET /api/v1/feed - Get personalized feed
+// GET /api/v1/feed - Get personalized feed (Latest: own posts + followed users)
 router.get('/feed', authenticate, async (req, res) => {
   try {
     const userId = req.user._id;
     const { page = 1, limit = 20 } = req.query;
+
+    console.log(`[FEED] userId: ${userId}, page: ${page}, limit: ${limit}`);
 
     // Get user's following list
     const following = await require('../models/Relationship').find({
       follower: userId,
       status: 'accepted'
     }).select('following');
-
     const followingIds = following.map(r => r.following);
+    console.log(`[FEED] followingIds:`, followingIds);
 
-    // Get feed posts
-    const posts = await Post.getFeedPosts(userId, followingIds, {
-      page: parseInt(page),
-      limit: parseInt(limit)
-    });
+    // Get feed posts (own posts + posts from followed users)
+    let posts;
+    try {
+      posts = await Post.getFeedPosts(userId, followingIds, {
+        page: parseInt(page),
+        limit: parseInt(limit)
+      });
+      console.log(`[FEED] getFeedPosts returned ${posts.length} posts`);
+    } catch (err) {
+      console.error('[FEED] Error in getFeedPosts:', err);
+      throw err;
+    }
 
     // Check which posts are liked by current user
     const postIds = posts.map(post => post._id);
-    const userLikes = await Like.find({
-      user: userId,
-      post: { $in: postIds },
-      type: 'post'
-    });
+    console.log(`[FEED] postIds:`, postIds);
+    let userLikes = [];
+    try {
+      userLikes = await Like.find({
+        user: userId,
+        post: { $in: postIds },
+        type: 'post'
+      });
+      console.log(`[FEED] userLikes found: ${userLikes.length}`);
+    } catch (err) {
+      console.error('[FEED] Error in Like.find:', err);
+      throw err;
+    }
 
     const likedPostIds = userLikes.map(like => like.post.toString());
-
     // Add isLiked property to posts
     const postsWithLikes = posts.map(post => ({
       ...post,
       isLiked: likedPostIds.includes(post._id.toString())
     }));
+    console.log(`[FEED] postsWithLikes length: ${postsWithLikes.length}`);
 
     res.json({
       success: true,
@@ -483,12 +746,13 @@ router.get('/feed', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Feed retrieval error:', error);
+    console.error('[FEED] Feed retrieval error:', error);
     res.status(500).json({
       success: false,
       error: {
         code: 'FEED_ERROR',
-        message: 'Failed to retrieve feed'
+        message: 'Failed to retrieve feed',
+        details: error.message
       }
     });
   }

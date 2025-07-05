@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -29,6 +29,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import SearchBar from './SearchBar';
+import { notificationsAPI } from '../services/api';
 
 interface HeaderProps {
   currentUser?: {
@@ -43,6 +44,7 @@ interface HeaderProps {
   searchSuggestions?: any[];
   isLoading?: boolean;
   onCreatePost?: () => void;
+  onUnreadCountChange?: (count: number) => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -51,7 +53,8 @@ const Header: React.FC<HeaderProps> = ({
   onSearch,
   searchSuggestions = [],
   isLoading = false,
-  onCreatePost
+  onCreatePost,
+  onUnreadCountChange
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -60,6 +63,7 @@ const Header: React.FC<HeaderProps> = ({
   
   const [userMenuAnchor, setUserMenuAnchor] = useState<null | HTMLElement>(null);
   const [mobileMenuAnchor, setMobileMenuAnchor] = useState<null | HTMLElement>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setUserMenuAnchor(event.currentTarget);
@@ -100,6 +104,30 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  // Fetch unread notification count
+  useEffect(() => {
+    const fetchUnreadCount = async () => {
+      if (currentUser) {
+        try {
+          const response = await notificationsAPI.getUnreadCount();
+          setUnreadCount(response.count);
+          onUnreadCountChange?.(response.count);
+        } catch (error) {
+          console.error('Failed to fetch unread count:', error);
+          setUnreadCount(0);
+          onUnreadCountChange?.(0);
+        }
+      }
+    };
+
+    fetchUnreadCount();
+    
+    // Refresh count every 30 seconds
+    const interval = setInterval(fetchUnreadCount, 30000);
+    
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
   const isActiveRoute = (path: string) => {
     return location.pathname === path;
   };
@@ -107,6 +135,7 @@ const Header: React.FC<HeaderProps> = ({
   const navigationItems = [
     { label: 'Home', path: '/', icon: <Home /> },
     { label: 'Search', path: '/search', icon: <Search /> },
+    { label: 'People', path: '/people', icon: <Person /> },
     { label: 'Notifications', path: '/notifications', icon: <Notifications /> },
     { label: 'Messages', path: '/messages', icon: <Mail /> }
   ];
@@ -131,13 +160,14 @@ const Header: React.FC<HeaderProps> = ({
         </Box>
 
         {/* Search Bar - Desktop */}
-        {!isMobile && (
+        {!isMobile && location.pathname !== '/search' && (
           <Box sx={{ flex: 1, maxWidth: 600, mx: 4 }}>
             <SearchBar
               placeholder="Search posts, users, hashtags..."
               onSearch={onSearch}
               suggestions={searchSuggestions}
               isLoading={isLoading}
+              navigateToSearchPage={true}
             />
           </Box>
         )}
@@ -157,7 +187,7 @@ const Header: React.FC<HeaderProps> = ({
                       sx={{ mx: 0.5 }}
                     >
                       {item.path === '/notifications' ? (
-                        <Badge badgeContent={3} color="error">
+                        <Badge badgeContent={unreadCount > 0 ? unreadCount : undefined} color="error">
                           {item.icon}
                         </Badge>
                       ) : (
@@ -184,9 +214,13 @@ const Header: React.FC<HeaderProps> = ({
               >
                 <Avatar
                   src={currentUser.avatar}
-                  sx={{ width: 32, height: 32 }}
+                  sx={{ 
+                    width: 32, 
+                    height: 32,
+                    bgcolor: `hsl(${(currentUser.username?.charCodeAt(0) || 0) * 7 % 360}, 70%, 50%)`
+                  }}
                 >
-                  {currentUser.firstName[0]}{currentUser.lastName[0]}
+                  {currentUser.firstName?.[0]}{currentUser.lastName?.[0]}
                 </Avatar>
               </IconButton>
 
@@ -220,13 +254,14 @@ const Header: React.FC<HeaderProps> = ({
       </Toolbar>
 
       {/* Mobile Search Bar */}
-      {isMobile && currentUser && (
+      {isMobile && currentUser && location.pathname !== '/search' && (
         <Box sx={{ px: 2, pb: 2 }}>
           <SearchBar
             placeholder="Search posts, users, hashtags..."
             onSearch={onSearch}
             suggestions={searchSuggestions}
             isLoading={isLoading}
+            navigateToSearchPage={true}
           />
         </Box>
       )}
@@ -300,7 +335,7 @@ const Header: React.FC<HeaderProps> = ({
           >
             <ListItemIcon>
               {item.path === '/notifications' ? (
-                <Badge badgeContent={3} color="error">
+                <Badge badgeContent={unreadCount > 0 ? unreadCount : undefined} color="error">
                   {item.icon}
                 </Badge>
               ) : (

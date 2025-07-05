@@ -46,6 +46,7 @@ interface SearchBarProps {
   searchHistory?: string[];
   onClearHistory?: () => void;
   trendingSearches?: string[];
+  navigateToSearchPage?: boolean;
 }
 
 const SearchBar: React.FC<SearchBarProps> = ({
@@ -55,7 +56,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
   isLoading = false,
   searchHistory = [],
   onClearHistory,
-  trendingSearches = []
+  trendingSearches = [],
+  navigateToSearchPage = false
 }) => {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
@@ -133,7 +135,13 @@ const SearchBar: React.FC<SearchBarProps> = ({
     event.preventDefault();
     if (query.trim()) {
       setIsOpen(false);
-      onSearch?.(query.trim());
+      if (navigateToSearchPage) {
+        // Navigate to search page with query
+        navigate(`/search?q=${encodeURIComponent(query.trim())}`);
+      } else {
+        // Use the onSearch callback for suggestions
+        onSearch?.(query.trim());
+      }
     }
   };
 

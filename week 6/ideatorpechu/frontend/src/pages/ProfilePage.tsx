@@ -106,7 +106,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
         setUser(prev => prev ? {
           ...prev,
           isFollowing: false,
-          followersCount: prev.followersCount - 1
+          stats: {
+            followersCount: (prev.stats?.followersCount || 0) - 1,
+            followingCount: prev.stats?.followingCount || 0,
+            postsCount: prev.stats?.postsCount || 0,
+            profileViews: prev.stats?.profileViews || 0
+          }
         } : null);
         setSnackbar({ open: true, message: 'Unfollowed user', severity: 'success' });
       } else {
@@ -114,7 +119,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
         setUser(prev => prev ? {
           ...prev,
           isFollowing: true,
-          followersCount: prev.followersCount + 1
+          stats: {
+            followersCount: (prev.stats?.followersCount || 0) + 1,
+            followingCount: prev.stats?.followingCount || 0,
+            postsCount: prev.stats?.postsCount || 0,
+            profileViews: prev.stats?.profileViews || 0
+          }
         } : null);
         setSnackbar({ open: true, message: 'Followed user', severity: 'success' });
       }
@@ -194,7 +204,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
       <Box sx={{ position: 'relative', mb: 2 }}>
         <Box
           component="img"
-          src={user.coverImage}
+          src={user.coverImage || '/default-cover.svg'}
           alt="Cover"
           sx={{
             width: '100%',
@@ -267,7 +277,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
               <Box display="flex" alignItems="center" gap={0.5}>
                 <CalendarToday fontSize="small" color="action" />
                 <Typography variant="body2" color="text.secondary">
-                  Joined {formatDistanceToNow(new Date(user.joinedDate), { addSuffix: true })}
+                  Joined {formatDistanceToNow(new Date(user.createdAt), { addSuffix: true })}
                 </Typography>
               </Box>
             </Box>
@@ -275,7 +285,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
             <Box display="flex" alignItems="center" gap={3} mb={2}>
               <Box textAlign="center">
                 <Typography variant="h6" fontWeight="bold">
-                  {user.postsCount}
+                  {user.stats?.postsCount || 0}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Posts
@@ -284,7 +294,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
               
               <Box textAlign="center" sx={{ cursor: 'pointer' }}>
                 <Typography variant="h6" fontWeight="bold">
-                  {user.followersCount}
+                  {user.stats?.followersCount || 0}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Followers
@@ -293,7 +303,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
               
               <Box textAlign="center" sx={{ cursor: 'pointer' }}>
                 <Typography variant="h6" fontWeight="bold">
-                  {user.followingCount}
+                  {user.stats?.followingCount || 0}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
                   Following

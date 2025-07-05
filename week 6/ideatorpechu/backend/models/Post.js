@@ -242,8 +242,29 @@ postSchema.statics.getFeedPosts = async function(userId, followingIds, options =
     },
     {
       $project: {
-        'author.password': 0,
-        'author.email': 0
+        _id: 1,
+        content: 1,
+        media: 1,
+        hashtags: 1,
+        mentions: 1,
+        location: 1,
+        isPublic: 1,
+        isEdited: 1,
+        editHistory: 1,
+        stats: 1,
+        moderation: 1,
+        isShared: 1,
+        originalPost: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        author: {
+          _id: 1,
+          username: 1,
+          firstName: 1,
+          lastName: 1,
+          avatar: 1,
+          isVerified: 1
+        }
       }
     }
   ]);

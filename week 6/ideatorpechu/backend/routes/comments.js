@@ -149,9 +149,12 @@ router.get('/post/:postId', authenticate, async (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const userId = req.user._id;
 
+    console.log(`[COMMENTS] Getting comments for postId: ${postId}, userId: ${userId}, page: ${page}, limit: ${limit}`);
+
     // Check if post exists
     const post = await Post.findById(postId);
     if (!post) {
+      console.log(`[COMMENTS] Post not found: ${postId}`);
       return res.status(404).json({
         success: false,
         error: {
@@ -166,6 +169,8 @@ router.get('/post/:postId', authenticate, async (req, res) => {
       page: parseInt(page),
       limit: parseInt(limit)
     });
+
+    console.log(`[COMMENTS] Found ${result.comments.length} comments for post ${postId}`);
 
     // Check which comments are liked by current user
     const commentIds = result.comments.map(comment => comment._id);
@@ -183,6 +188,8 @@ router.get('/post/:postId', authenticate, async (req, res) => {
       isLiked: likedCommentIds.includes(comment._id.toString())
     }));
 
+    console.log(`[COMMENTS] Returning ${commentsWithLikes.length} comments with likes`);
+
     res.json({
       success: true,
       data: { 
@@ -193,7 +200,7 @@ router.get('/post/:postId', authenticate, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Comments retrieval error:', error);
+    console.error('[COMMENTS] Comments retrieval error:', error);
     res.status(500).json({
       success: false,
       error: {

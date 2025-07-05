@@ -32,11 +32,12 @@ import {
   LocationOn as LocationOnIcon,
   AccessTime as AccessTimeIcon
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import PostCard from '../components/PostCard';
 import UserCard from '../components/UserCard';
-import { searchAPI } from '../services/api';
+import { searchAPI, usersAPI } from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SearchResult {
   _id: string;
@@ -50,6 +51,8 @@ interface SearchResult {
 
 const SearchPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { user: currentUser } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -118,6 +121,15 @@ const SearchPage: React.FC = () => {
     }
   };
 
+  // Effect to handle URL parameters on page load
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const queryParam = urlParams.get('q');
+    if (queryParam) {
+      setSearchQuery(queryParam);
+    }
+  }, [location.search]);
+
   // Effect to trigger search when query changes
   useEffect(() => {
     if (debouncedQuery) {
@@ -160,6 +172,30 @@ const SearchPage: React.FC = () => {
   const handlePostClick = (postId: string) => {
     // Navigate to post detail or scroll to post in feed
     navigate(`/post/${postId}`);
+  };
+
+  const handleFollowUser = async (userId: string) => {
+    try {
+      await usersAPI.followUser(userId);
+      // Update the user in the list to show as following
+      setUsers(prev => prev.map(user => 
+        user._id === userId ? { ...user, isFollowing: true } : user
+      ));
+    } catch (err: any) {
+      console.error('Follow user error:', err);
+    }
+  };
+
+  const handleUnfollowUser = async (userId: string) => {
+    try {
+      await usersAPI.unfollowUser(userId);
+      // Update the user in the list to show as not following
+      setUsers(prev => prev.map(user => 
+        user._id === userId ? { ...user, isFollowing: false } : user
+      ));
+    } catch (err: any) {
+      console.error('Unfollow user error:', err);
+    }
   };
 
   return (
@@ -253,28 +289,18 @@ const SearchPage: React.FC = () => {
                   <Typography variant="h6" gutterBottom>
                     Users ({users.length})
                   </Typography>
-                  <List>
+                  <Box>
                     {users.map((user) => (
-                      <ListItem key={user._id}>
-                        <ListItemButton onClick={() => handleUserClick(user._id)}>
-                          <ListItemAvatar>
-                            <Avatar src={user.avatar} alt={user.username}>
-                              {user.firstName?.[0]}
-                            </Avatar>
-                          </ListItemAvatar>
-                          <ListItemText
-                            primary={`${user.firstName} ${user.lastName}`}
-                            secondary={`@${user.username}`}
-                          />
-                          <ListItemSecondaryAction>
-                            <Button variant="outlined" size="small">
-                              Follow
-                            </Button>
-                          </ListItemSecondaryAction>
-                        </ListItemButton>
-                      </ListItem>
+                      <UserCard
+                        key={user._id}
+                        user={user}
+                        variant="compact"
+                        onFollow={handleFollowUser}
+                        onUnfollow={handleUnfollowUser}
+                        currentUserId={currentUser?._id}
+                      />
                     ))}
-                  </List>
+                  </Box>
                 </Box>
               )}
 
@@ -348,28 +374,18 @@ const SearchPage: React.FC = () => {
             <Box>
               {users.length > 0 ? (
                 <>
-                  <List>
+                  <Box>
                     {users.map((user) => (
-                      <ListItem key={user._id}>
-                        <ListItemButton onClick={() => handleUserClick(user._id)}>
-                          <ListItemAvatar>
-                            <Avatar src={user.avatar} alt={user.username}>
-                              {user.firstName?.[0]}
-                            </Avatar>
-                          </ListItemAvatar>
-                          <ListItemText
-                            primary={`${user.firstName} ${user.lastName}`}
-                            secondary={`@${user.username} • ${user.stats?.followersCount || 0} followers`}
-                          />
-                          <ListItemSecondaryAction>
-                            <Button variant="outlined" size="small">
-                              Follow
-                            </Button>
-                          </ListItemSecondaryAction>
-                        </ListItemButton>
-                      </ListItem>
+                      <UserCard
+                        key={user._id}
+                        user={user}
+                        variant="compact"
+                        onFollow={handleFollowUser}
+                        onUnfollow={handleUnfollowUser}
+                        currentUserId={currentUser?._id}
+                      />
                     ))}
-                  </List>
+                  </Box>
                   {usersTotal > 20 && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
                       <Pagination

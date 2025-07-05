@@ -14,7 +14,8 @@ import {
   ListItemText,
   Collapse,
   Alert,
-  Skeleton
+  Skeleton,
+  CircularProgress
 } from '@mui/material';
 import {
   Send,
@@ -32,13 +33,14 @@ import { formatDistanceToNow } from 'date-fns';
 import { useForm, Controller } from 'react-hook-form';
 import { yupResolver } from '@hookform/resolvers/yup';
 import * as yup from 'yup';
-import { Comment, commentsAPI, likesAPI } from '../services/api';
+import { Comment, commentsAPI, likesAPI, User } from '../services/api';
 
 
 
 interface CommentSectionProps {
   postId: string;
   currentUserId?: string;
+  currentUser?: User | null;
   onCommentAdded?: () => void;
   onCommentUpdated?: () => void;
   onCommentDeleted?: () => void;
@@ -55,6 +57,7 @@ const schema = yup.object({
 const CommentSection: React.FC<CommentSectionProps> = ({
   postId,
   currentUserId,
+  currentUser,
   onCommentAdded,
   onCommentUpdated,
   onCommentDeleted
@@ -82,14 +85,21 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
   // Load comments
   const loadComments = async () => {
+    console.log('[CommentSection] Loading comments for postId:', postId);
     setLoading(true);
     setError(null);
     try {
       const response = await commentsAPI.getComments(postId, 1, 50);
+      console.log('[CommentSection] Comments response:', response);
+      console.log('[CommentSection] Response type:', typeof response);
+      console.log('[CommentSection] Comments array:', response.comments);
+      console.log('[CommentSection] Comments length:', response.comments?.length);
       setComments(response.comments || []);
+      console.log('[CommentSection] Set comments:', response.comments || []);
     } catch (err: any) {
+      console.error('[CommentSection] Load comments error:', err);
+      console.error('[CommentSection] Error response:', err.response);
       setError(err.message || 'Failed to load comments');
-      console.error('Load comments error:', err);
     } finally {
       setLoading(false);
     }
@@ -143,22 +153,26 @@ const CommentSection: React.FC<CommentSectionProps> = ({
   const handleLikeComment = async (commentId: string) => {
     try {
       const comment = comments.find(c => c._id === commentId);
-      if (comment) {
-        if (comment.isLiked) {
-          await likesAPI.unlikeComment(commentId);
-        } else {
-          await likesAPI.likeComment(commentId);
-        }
-        // Update the comment in the local state
-        setComments(prev => prev.map(c => 
-          c._id === commentId 
-            ? { ...c, isLiked: !c.isLiked, likes: c.isLiked ? c.likes - 1 : c.likes + 1 }
-            : c
-        ));
-      }
+      if (!comment) return;
+
+      // Use the new toggle API
+      const result = await likesAPI.toggleCommentLike(commentId);
+
+      // Update the comment in the local state based on the response
+      setComments(prev => prev.map(c => 
+        c._id === commentId 
+          ? { 
+              ...c, 
+              isLiked: result.isLiked, 
+              likes: result.isLiked 
+                ? [...c.likes, currentUserId || '']
+                : c.likes.filter(id => id !== currentUserId)
+            }
+          : c
+      ));
     } catch (err: any) {
-      setError(err.message || 'Failed to like/unlike comment');
-      console.error('Like comment error:', err);
+      console.error('Error toggling comment like:', err);
+      setError(err.response?.data?.message || 'Failed to update comment like');
     }
   };
 
@@ -240,7 +254,12 @@ const CommentSection: React.FC<CommentSectionProps> = ({
       <Box display="flex" gap={2}>
         <Avatar
           src={comment.author.avatar}
-          sx={{ width: 32, height: 32, mt: 0.5 }}
+          sx={{ 
+            width: 32, 
+            height: 32, 
+            mt: 0.5,
+            bgcolor: `hsl(${(comment.author.username?.charCodeAt(0) || 0) * 7 % 360}, 70%, 50%)`
+          }}
         >
           {comment.author.firstName?.[0]}{comment.author.lastName?.[0]}
         </Avatar>
@@ -271,7 +290,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
               {comment.isLiked ? <Favorite fontSize="small" /> : <FavoriteBorder fontSize="small" />}
             </IconButton>
             <Typography variant="caption" color="text.secondary">
-              {comment.likes}
+              {comment.likes.length}
             </Typography>
             
             <Button
@@ -405,14 +424,43 @@ const CommentSection: React.FC<CommentSectionProps> = ({
         Comments ({comments.length})
       </Typography>
       
-      {/* Add Comment Form */}
-      <Box sx={{ mb: 3 }}>
+      {loading && (
+        <Box display="flex" justifyContent="center" py={2}>
+          <CircularProgress size={24} />
+        </Box>
+      )}
+      
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          {error}
+        </Alert>
+      )}
+      
+      {/* Comments List - Show first */}
+      {comments.length === 0 ? (
+        <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>
+          No comments yet. Be the first to comment!
+        </Typography>
+      ) : (
+        <Box sx={{ mb: 3 }}>
+          {comments.map(comment => renderComment(comment))}
+        </Box>
+      )}
+      
+      <Divider sx={{ mb: 2 }} />
+      
+      {/* Add Comment Form - Show at bottom */}
+      <Box>
         <form onSubmit={handleSubmit(handleAddComment)}>
           <Box display="flex" gap={2}>
             <Avatar
-              sx={{ width: 40, height: 40 }}
+              sx={{ 
+                width: 40, 
+                height: 40,
+                bgcolor: currentUser ? `hsl(${(currentUser.username?.charCodeAt(0) || 0) * 7 % 360}, 70%, 50%)` : 'grey.500'
+              }}
             >
-              {currentUserId ? 'U' : 'G'}
+              {currentUser ? `${currentUser.firstName?.[0] || ''}${currentUser.lastName?.[0] || ''}` : 'U'}
             </Avatar>
             <Box sx={{ flex: 1 }}>
               <Controller
@@ -445,19 +493,6 @@ const CommentSection: React.FC<CommentSectionProps> = ({
           </Box>
         </form>
       </Box>
-      
-      <Divider sx={{ mb: 2 }} />
-      
-      {/* Comments List */}
-      {comments.length === 0 ? (
-        <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>
-          No comments yet. Be the first to comment!
-        </Typography>
-      ) : (
-        <Box>
-          {comments.map(comment => renderComment(comment))}
-        </Box>
-      )}
       
       {/* Comment Menu */}
       <Menu

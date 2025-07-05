@@ -46,11 +46,14 @@ const LoginPage: React.FC = () => {
 
   // Clear auth error when user starts typing
   const handleInputChange = () => {
-    if (authError) {
-      console.log('User started typing - clearing error');
-      clearError();
-    }
+    // Only clear error if user is actually typing (not just focusing)
+    // This will be handled by the form validation instead
   };
+
+  // Debug effect to log auth error changes
+  useEffect(() => {
+    console.log('LoginPage - authError changed:', authError);
+  }, [authError]);
 
   const onSubmit = async (data: LoginFormData) => {
     console.log('LoginPage onSubmit called with data:', { email: data.email, password: '***' });
@@ -73,9 +76,7 @@ const LoginPage: React.FC = () => {
   const handleFormSubmit = (e: React.FormEvent) => {
     console.log('Form submit event triggered');
     e.preventDefault();
-    handleSubmit(onSubmit, (errors) => {
-      console.error('Form validation errors:', errors);
-    })(e);
+    handleSubmit(onSubmit)(e);
   };
 
   // Debug logging before render
@@ -137,7 +138,14 @@ const LoginPage: React.FC = () => {
           {/* Login Form */}
           <CardContent sx={{ padding: 4 }}>
             {authError && (
-              <Alert severity="error" sx={{ marginBottom: 3 }}>
+              <Alert 
+                severity="error" 
+                sx={{ marginBottom: 3 }}
+                onClose={() => {
+                  console.log('User closed error alert');
+                  clearError();
+                }}
+              >
                 {authError}
               </Alert>
             )}
@@ -152,7 +160,6 @@ const LoginPage: React.FC = () => {
                 margin="normal"
                 error={!!errors.email}
                 helperText={errors.email?.message}
-                onChange={handleInputChange}
                 sx={{ marginBottom: 2 }}
               />
 
@@ -165,7 +172,6 @@ const LoginPage: React.FC = () => {
                 margin="normal"
                 error={!!errors.password}
                 helperText={errors.password?.message}
-                onChange={handleInputChange}
                 sx={{ marginBottom: 3 }}
               />
 
@@ -175,9 +181,6 @@ const LoginPage: React.FC = () => {
                 variant="contained"
                 size="large"
                 disabled={loading || isLoading}
-                onClick={() => {
-                  console.log('Login button clicked');
-                }}
                 sx={{
                   height: 48,
                   fontSize: '1.1rem',

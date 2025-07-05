@@ -7,10 +7,10 @@ const Relationship = require('../models/Relationship');
 const Like = require('../models/Like');
 
 // Get user profile
-router.get('/:userId', authenticate, async (req, res) => {
+router.get('/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const currentUserId = req.user._id;
+    const currentUserId = req.user?._id; // Optional authentication
 
     // Get user profile
     const user = await User.findById(userId)
@@ -27,12 +27,18 @@ router.get('/:userId', authenticate, async (req, res) => {
       });
     }
 
-    // Check if current user is following this user
-    const relationship = await Relationship.findOne({
-      follower: currentUserId,
-      following: userId,
-      status: 'accepted'
-    });
+    // Check if current user is following this user (only if authenticated)
+    let relationship = null;
+    let isFollowing = false;
+    
+    if (currentUserId) {
+      relationship = await Relationship.findOne({
+        follower: currentUserId,
+        following: userId,
+        status: 'accepted'
+      });
+      isFollowing = !!relationship;
+    }
 
     // Get user stats
     const postsCount = await Post.countDocuments({ author: userId, isPublic: true });
@@ -41,10 +47,13 @@ router.get('/:userId', authenticate, async (req, res) => {
 
     const userProfile = {
       ...user,
-      postsCount,
-      followersCount,
-      followingCount,
-      isFollowing: !!relationship
+      stats: {
+        postsCount,
+        followersCount,
+        followingCount,
+        profileViews: 0 // TODO: Implement profile views tracking
+      },
+      isFollowing
     };
 
     res.json({

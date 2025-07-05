@@ -1,0 +1,54 @@
+<svg width="1200" height="400" viewBox="0 0 1200 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#f093fb;stop-opacity:0.3" />
+      <stop offset="50%" style="stop-color:#f5576c;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#4facfe;stop-opacity:0.3" />
+    </linearGradient>
+    <radialGradient id="radial1" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.1" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0" />
+    </radialGradient>
+  </defs>
+  
+  <!-- Main background gradient -->
+  <rect width="1200" height="400" fill="url(#gradient1)"/>
+  
+  <!-- Overlay gradient -->
+  <rect width="1200" height="400" fill="url(#gradient2)"/>
+  
+  <!-- Radial highlight -->
+  <circle cx="300" cy="200" r="150" fill="url(#radial1)"/>
+  <circle cx="900" cy="100" r="100" fill="url(#radial1)"/>
+  
+  <!-- Abstract geometric shapes -->
+  <polygon points="0,300 200,250 300,350 0,400" fill="rgba(255,255,255,0.1)"/>
+  <polygon points="1000,0 1200,50 1100,150 900,100" fill="rgba(255,255,255,0.1)"/>
+  
+  <!-- Floating circles -->
+  <circle cx="150" cy="80" r="20" fill="rgba(255,255,255,0.2)"/>
+  <circle cx="1050" cy="300" r="15" fill="rgba(255,255,255,0.2)"/>
+  <circle cx="800" cy="50" r="25" fill="rgba(255,255,255,0.15)"/>
+  
+  <!-- Subtle grid pattern -->
+  <g opacity="0.1">
+    <line x1="0" y1="100" x2="1200" y2="100" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="200" x2="1200" y2="200" stroke="white" stroke-width="1"/>
+    <line x1="0" y1="300" x2="1200" y2="300" stroke="white" stroke-width="1"/>
+    <line x1="300" y1="0" x2="300" y2="400" stroke="white" stroke-width="1"/>
+    <line x1="600" y1="0" x2="600" y2="400" stroke="white" stroke-width="1"/>
+    <line x1="900" y1="0" x2="900" y2="400" stroke="white" stroke-width="1"/>
+  </g>
+  
+  <!-- Brand text (optional) -->
+  <text x="600" y="200" text-anchor="middle" fill="rgba(255,255,255,0.3)" font-family="Arial, sans-serif" font-size="48" font-weight="bold">
+    IdeatorPechu
+  </text>
+  <text x="600" y="240" text-anchor="middle" fill="rgba(255,255,255,0.2)" font-family="Arial, sans-serif" font-size="16">
+    Connect • Share • Discover
+  </text>
+</svg> 

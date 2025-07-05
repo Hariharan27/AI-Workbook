@@ -184,17 +184,21 @@ router.get('/suggested-users', async (req, res) => {
     
     const followingIds = followingRelationships.map(rel => rel.following);
     
+    // Only get users that the current user doesn't follow
     const suggestedUsers = await User.find({
       _id: { $nin: [...followingIds, req.user._id] },
       isPrivate: false
     })
-    .select('username firstName lastName avatar bio followersCount')
+    .select('username firstName lastName avatar bio followersCount createdAt lastSeen')
     .sort({ followersCount: -1 })
     .limit(parseInt(limit));
     
     res.json({
       success: true,
-      data: { users: suggestedUsers },
+      data: { 
+        users: suggestedUsers,
+        message: suggestedUsers.length === 0 ? 'No users available for suggestions' : 'Suggested users retrieved successfully'
+      },
       message: 'Suggested users retrieved successfully'
     });
   } catch (error) {

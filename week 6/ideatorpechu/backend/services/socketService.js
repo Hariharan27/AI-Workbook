@@ -28,8 +28,29 @@ class SocketService {
   }
 
   setupMiddleware() {
-    // Authentication middleware
-    this.io.use(async (socket, next) => {
+    // Global middleware is now handled per namespace
+    // This method is kept for compatibility but no longer needed
+  }
+
+  setupNamespaces() {
+    // Social namespace for posts, likes, comments, etc.
+    const socialNamespace = this.io.of('/social');
+    socialNamespace.use(this.setupAuthMiddleware());
+    this.setupSocialEvents(socialNamespace);
+
+    // Messaging namespace for private messages
+    const messagingNamespace = this.io.of('/messaging');
+    messagingNamespace.use(this.setupAuthMiddleware());
+    this.setupMessagingEvents(messagingNamespace);
+
+    // Notifications namespace
+    const notificationNamespace = this.io.of('/notifications');
+    notificationNamespace.use(this.setupAuthMiddleware());
+    this.setupNotificationEvents(notificationNamespace);
+  }
+
+  setupAuthMiddleware() {
+    return async (socket, next) => {
       try {
         const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
         
@@ -47,27 +68,21 @@ class SocketService {
         socket.user = user;
         next();
       } catch (error) {
+        console.error('Socket authentication error:', error.message);
         next(new Error('Authentication error: Invalid token'));
       }
-    });
-  }
-
-  setupNamespaces() {
-    // Social namespace for posts, likes, comments, etc.
-    const socialNamespace = this.io.of('/social');
-    this.setupSocialEvents(socialNamespace);
-
-    // Messaging namespace for private messages
-    const messagingNamespace = this.io.of('/messaging');
-    this.setupMessagingEvents(messagingNamespace);
-
-    // Notifications namespace
-    const notificationNamespace = this.io.of('/notifications');
-    this.setupNotificationEvents(notificationNamespace);
+    };
   }
 
   setupSocialEvents(namespace) {
     namespace.on('connection', (socket) => {
+      // Check if user is authenticated
+      if (!socket.user || !socket.user._id) {
+        console.error('Socket connection without authenticated user');
+        socket.disconnect();
+        return;
+      }
+
       const userId = socket.user._id.toString();
       
       // Track connected user
@@ -126,6 +141,13 @@ class SocketService {
 
   setupMessagingEvents(namespace) {
     namespace.on('connection', (socket) => {
+      // Check if user is authenticated
+      if (!socket.user || !socket.user._id) {
+        console.error('Socket connection without authenticated user');
+        socket.disconnect();
+        return;
+      }
+
       const userId = socket.user._id.toString();
       
       console.log(`User ${socket.user.username} connected to messaging namespace`);
@@ -194,6 +216,13 @@ class SocketService {
 
   setupNotificationEvents(namespace) {
     namespace.on('connection', (socket) => {
+      // Check if user is authenticated
+      if (!socket.user || !socket.user._id) {
+        console.error('Socket connection without authenticated user');
+        socket.disconnect();
+        return;
+      }
+
       const userId = socket.user._id.toString();
       
       // Join user's notification room
@@ -209,6 +238,13 @@ class SocketService {
 
   setupGlobalEvents() {
     this.io.on('connection', (socket) => {
+      // Check if user is authenticated
+      if (!socket.user || !socket.user._id) {
+        console.error('Socket connection without authenticated user');
+        socket.disconnect();
+        return;
+      }
+
       const userId = socket.user._id.toString();
       
       // Update user's online status

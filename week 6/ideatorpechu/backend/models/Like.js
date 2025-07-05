@@ -1,4 +1,6 @@
 const mongoose = require('mongoose');
+const Post = require('./Post');
+const Comment = require('./Comment');
 
 const likeSchema = new mongoose.Schema({
   user: { 
@@ -40,71 +42,108 @@ likeSchema.pre('save', function(next) {
   next();
 });
 
-// Static method to add like
-likeSchema.statics.addLike = async function(userId, targetId, type) {
-  const likeData = {
-    user: userId,
-    type
-  };
-  
-  if (type === 'post') {
-    likeData.post = targetId;
-  } else if (type === 'comment') {
-    likeData.comment = targetId;
-  }
-  
+// Main toggle method - works without transactions
+likeSchema.statics.toggleLike = async function(userId, targetId, type) {
   try {
-    const like = await this.create(likeData);
-    
-    // Update the target's like count
+    // Build query
+    const query = { user: userId, type };
     if (type === 'post') {
-      await mongoose.model('Post').findByIdAndUpdate(targetId, {
-        $inc: { 'stats.likesCount': 1 }
-      });
+      query.post = targetId;
     } else if (type === 'comment') {
-      await mongoose.model('Comment').findByIdAndUpdate(targetId, {
-        $inc: { likesCount: 1 }
-      });
+      query.comment = targetId;
     }
     
-    return like;
+    // Check if like exists
+    const existingLike = await this.findOne(query);
+    
+    if (existingLike) {
+      // Unlike: Remove the like
+      await this.findByIdAndDelete(existingLike._id);
+      
+      // Decrement count
+      if (type === 'post') {
+        await Post.findByIdAndUpdate(targetId, {
+          $inc: { 'stats.likesCount': -1 }
+        });
+      } else if (type === 'comment') {
+        await Comment.findByIdAndUpdate(targetId, {
+          $inc: { likesCount: -1 }
+        });
+      }
+      
+      return { isLiked: false, like: null };
+    } else {
+      // Like: Create new like
+      const likeData = { user: userId, type };
+      if (type === 'post') {
+        likeData.post = targetId;
+      } else if (type === 'comment') {
+        likeData.comment = targetId;
+      }
+      
+      const newLike = await this.create(likeData);
+      
+      // Increment count
+      if (type === 'post') {
+        await Post.findByIdAndUpdate(targetId, {
+          $inc: { 'stats.likesCount': 1 }
+        });
+      } else if (type === 'comment') {
+        await Comment.findByIdAndUpdate(targetId, {
+          $inc: { likesCount: 1 }
+        });
+      }
+      
+      return { isLiked: true, like: newLike };
+    }
   } catch (error) {
     if (error.code === 11000) {
-      throw new Error('Already liked');
+      // Duplicate key error - handle race condition
+      // Try to remove the like instead
+      const query = { user: userId, type };
+      if (type === 'post') {
+        query.post = targetId;
+      } else if (type === 'comment') {
+        query.comment = targetId;
+      }
+      
+      const existingLike = await this.findOne(query);
+      if (existingLike) {
+        await this.findByIdAndDelete(existingLike._id);
+        
+        // Decrement count
+        if (type === 'post') {
+          await Post.findByIdAndUpdate(targetId, {
+            $inc: { 'stats.likesCount': -1 }
+          });
+        } else if (type === 'comment') {
+          await Comment.findByIdAndUpdate(targetId, {
+            $inc: { likesCount: -1 }
+          });
+        }
+        
+        return { isLiked: false, like: null };
+      }
     }
     throw error;
   }
 };
 
-// Static method to remove like
+// Legacy methods for backward compatibility
+likeSchema.statics.addLike = async function(userId, targetId, type) {
+  const result = await this.toggleLike(userId, targetId, type);
+  if (!result.isLiked) {
+    throw new Error('Like operation failed');
+  }
+  return result.like;
+};
+
 likeSchema.statics.removeLike = async function(userId, targetId, type) {
-  const query = {
-    user: userId,
-    type
-  };
-  
-  if (type === 'post') {
-    query.post = targetId;
-  } else if (type === 'comment') {
-    query.comment = targetId;
+  const result = await this.toggleLike(userId, targetId, type);
+  if (result.isLiked) {
+    throw new Error('Unlike operation failed');
   }
-  
-  const like = await this.findOneAndDelete(query);
-  
-  if (like) {
-    // Update the target's like count
-    if (type === 'post') {
-      await mongoose.model('Post').findByIdAndUpdate(targetId, {
-        $inc: { 'stats.likesCount': -1 }
-      });
-    } else if (type === 'comment') {
-      await mongoose.model('Comment').findByIdAndUpdate(targetId, {
-        $inc: { likesCount: -1 }
-      });
-    }
-  }
-  
-  return like;
+  return result.like;
 };
 
 // Static method to check if user liked
@@ -156,6 +195,35 @@ likeSchema.statics.getLikes = async function(targetId, type, options = {}) {
       hasPrev: page > 1
     }
   };
+};
+
+// Method to sync like counts (useful for fixing data inconsistencies)
+likeSchema.statics.syncLikeCounts = async function() {
+  try {
+    // Sync post like counts
+    const posts = await Post.find({}, '_id');
+    for (const post of posts) {
+      const actualCount = await this.countDocuments({ post: post._id, type: 'post' });
+      await Post.findByIdAndUpdate(
+        post._id, 
+        { 'stats.likesCount': actualCount }
+      );
+    }
+    
+    // Sync comment like counts
+    const comments = await Comment.find({}, '_id');
+    for (const comment of comments) {
+      const actualCount = await this.countDocuments({ comment: comment._id, type: 'comment' });
+      await Comment.findByIdAndUpdate(
+        comment._id, 
+        { likesCount: actualCount }
+      );
+    }
+    
+    console.log('Like counts synced successfully');
+  } catch (error) {
+    throw error;
+  }
 };
 
 module.exports = mongoose.model('Like', likeSchema); 

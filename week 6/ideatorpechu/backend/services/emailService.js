@@ -12,6 +12,13 @@ class EmailService {
 
   async initialize() {
     try {
+      // Check if email configuration is available
+      if (!process.env.EMAIL_HOST || !process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+        console.log('Email configuration not found. Using development mode with console logging.');
+        this.transporter = null;
+        return;
+      }
+
       this.transporter = nodemailer.createTransport({
         host: process.env.EMAIL_HOST,
         port: process.env.EMAIL_PORT,
@@ -27,7 +34,8 @@ class EmailService {
       console.log('Email service initialized successfully');
     } catch (error) {
       console.error('Email service initialization failed:', error);
-      throw error;
+      console.log('Email service will use console logging for development.');
+      this.transporter = null;
     }
   }
 
@@ -35,6 +43,16 @@ class EmailService {
     try {
       if (!this.transporter) {
         await this.initialize();
+      }
+
+      // If no transporter (development mode), log the email instead
+      if (!this.transporter) {
+        console.log('=== EMAIL WOULD BE SENT (Development Mode) ===');
+        console.log('To:', to);
+        console.log('Subject:', subject);
+        console.log('Content:', text || this.stripHtml(html));
+        console.log('=============================================');
+        return { messageId: 'dev-mode-' + Date.now() };
       }
 
       const mailOptions = {
@@ -50,6 +68,11 @@ class EmailService {
       return result;
     } catch (error) {
       console.error('Email sending failed:', error);
+      // Don't throw error in development mode
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Email error ignored in development mode');
+        return { messageId: 'error-' + Date.now() };
+      }
       throw error;
     }
   }

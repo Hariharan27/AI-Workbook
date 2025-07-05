@@ -19,7 +19,7 @@ import {
   CheckCircle,
   Block
 } from '@mui/icons-material';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, isValid, parseISO } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 
 interface User {
@@ -34,12 +34,31 @@ interface User {
   location?: string;
   website?: string;
   dateOfBirth?: string;
-  joinedDate: string;
   isVerified: boolean;
   isPrivate: boolean;
-  followersCount: number;
-  followingCount: number;
-  postsCount: number;
+  isActive: boolean;
+  lastSeen: string;
+  stats?: {
+    followersCount: number;
+    followingCount: number;
+    postsCount: number;
+    profileViews: number;
+  };
+  preferences?: {
+    notifications: {
+      email: boolean;
+      push: boolean;
+      sms: boolean;
+    };
+    privacy: {
+      profileVisibility: 'public' | 'friends' | 'private';
+      allowMessages: 'everyone' | 'friends' | 'none';
+    };
+    language: 'en' | 'ta' | 'hi';
+    theme: 'light' | 'dark' | 'auto';
+  };
+  createdAt: string;
+  updatedAt: string;
   isFollowing?: boolean;
   isBlocked?: boolean;
 }
@@ -120,8 +139,15 @@ const UserCard: React.FC<UserCardProps> = ({
     <Card sx={{ mb: 1, cursor: 'pointer' }} onClick={handleCardClick}>
       <CardContent sx={{ py: 1.5 }}>
         <Box display="flex" alignItems="center" gap={2}>
-          <Avatar src={user.avatar} sx={{ width: 40, height: 40 }}>
-            {user.firstName[0]}{user.lastName[0]}
+          <Avatar 
+            src={user.avatar} 
+            sx={{ 
+              width: 40, 
+              height: 40,
+              bgcolor: `hsl(${(user.username?.charCodeAt(0) || 0) * 7 % 360}, 70%, 50%)`
+            }}
+          >
+            {user.firstName?.[0]}{user.lastName?.[0]}
           </Avatar>
           
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -156,8 +182,15 @@ const UserCard: React.FC<UserCardProps> = ({
     <Card sx={{ mb: 2, cursor: 'pointer' }} onClick={handleCardClick}>
       <CardContent>
         <Box display="flex" alignItems="flex-start" gap={2}>
-          <Avatar src={user.avatar} sx={{ width: 60, height: 60 }}>
-            {user.firstName[0]}{user.lastName[0]}
+          <Avatar 
+            src={user.avatar} 
+            sx={{ 
+              width: 60, 
+              height: 60,
+              bgcolor: `hsl(${(user.username?.charCodeAt(0) || 0) * 7 % 360}, 70%, 50%)`
+            }}
+          >
+            {user.firstName?.[0]}{user.lastName?.[0]}
           </Avatar>
           
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -196,7 +229,10 @@ const UserCard: React.FC<UserCardProps> = ({
               <Box display="flex" alignItems="center" gap={0.5}>
                 <CalendarToday fontSize="small" color="action" />
                 <Typography variant="caption" color="text.secondary">
-                  Joined {formatDistanceToNow(new Date(user.joinedDate), { addSuffix: true })}
+                  {user.createdAt && isValid(new Date(user.createdAt)) 
+                    ? `Joined ${formatDistanceToNow(new Date(user.createdAt), { addSuffix: true })}`
+                    : 'Recently joined'
+                  }
                 </Typography>
               </Box>
             </Box>
@@ -204,7 +240,7 @@ const UserCard: React.FC<UserCardProps> = ({
             <Box display="flex" alignItems="center" gap={3} mb={1}>
               <Box textAlign="center">
                 <Typography variant="subtitle2" fontWeight="bold">
-                  {user.postsCount}
+                  {user.stats?.postsCount || 0}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Posts
@@ -213,7 +249,7 @@ const UserCard: React.FC<UserCardProps> = ({
               
               <Box textAlign="center">
                 <Typography variant="subtitle2" fontWeight="bold">
-                  {user.followersCount}
+                  {user.stats?.followersCount || 0}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Followers
@@ -222,7 +258,7 @@ const UserCard: React.FC<UserCardProps> = ({
               
               <Box textAlign="center">
                 <Typography variant="subtitle2" fontWeight="bold">
-                  {user.followingCount}
+                  {user.stats?.followingCount || 0}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
                   Following
@@ -252,6 +288,16 @@ const UserCard: React.FC<UserCardProps> = ({
               </Tooltip>
             </Box>
           )}
+          
+          {!showActions && user.isFollowing && !isOwnProfile && (
+            <Chip 
+              label="Following" 
+              size="small" 
+              color="primary" 
+              variant="outlined"
+              sx={{ alignSelf: 'flex-start' }}
+            />
+          )}
         </Box>
       </CardContent>
     </Card>
@@ -261,8 +307,15 @@ const UserCard: React.FC<UserCardProps> = ({
     <Card sx={{ mb: 1, cursor: 'pointer' }} onClick={handleCardClick}>
       <CardContent sx={{ py: 1.5 }}>
         <Box display="flex" alignItems="center" gap={2}>
-          <Avatar src={user.avatar} sx={{ width: 40, height: 40 }}>
-            {user.firstName[0]}{user.lastName[0]}
+          <Avatar 
+            src={user.avatar} 
+            sx={{ 
+              width: 40, 
+              height: 40,
+              bgcolor: `hsl(${(user.username?.charCodeAt(0) || 0) * 7 % 360}, 70%, 50%)`
+            }}
+          >
+            {user.firstName?.[0]}{user.lastName?.[0]}
           </Avatar>
           
           <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -275,7 +328,7 @@ const UserCard: React.FC<UserCardProps> = ({
               )}
             </Box>
             <Typography variant="caption" color="text.secondary" noWrap>
-              @{user.username} • {user.followersCount} followers
+              @{user.username} • {user.stats?.followersCount || 0} followers
             </Typography>
           </Box>
 

@@ -86,7 +86,7 @@ app.use(express.urlencoded({
   limit: process.env.MAX_FILE_SIZE || '10mb' 
 }));
 
-// Global rate limiting
+// Global rate limiting - Only enabled in production
 const globalRateLimit = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
@@ -101,7 +101,13 @@ const globalRateLimit = rateLimit({
   legacyHeaders: false
 });
 
-app.use(globalRateLimit);
+// Only apply rate limiting in production
+if (process.env.NODE_ENV === 'production') {
+  app.use(globalRateLimit);
+  console.log('Rate limiting enabled for production');
+} else {
+  console.log('Rate limiting disabled for development');
+}
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -154,10 +160,7 @@ app.get('/api/v1/feed', authenticate, async (req, res) => {
     const likedPostIds = userLikes.map(like => like.post.toString());
     
     // Add isLiked property to posts
-    const postsWithLikes = posts.map(post => ({
-      ...post.toObject(),
-      isLiked: likedPostIds.includes(post._id.toString())
-    }));
+    const postsWithLikes = posts.map(post => ({ ...post, isLiked: likedPostIds.includes(post._id.toString()) }));
     
     res.json({
       success: true,

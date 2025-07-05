@@ -1,25 +1,11 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const rateLimit = require('express-rate-limit');
 const Like = require('../models/Like');
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const { authenticate } = require('../middleware/authenticate');
 
 const router = express.Router();
-
-// Rate limiting for likes
-const likeRateLimit = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 50, // 50 likes per minute
-  message: {
-    success: false,
-    error: {
-      code: 'RATE_LIMIT_EXCEEDED',
-      message: 'Too many likes, please try again later.'
-    }
-  }
-});
 
 // Validation middleware
 const validateLike = [
@@ -33,184 +19,40 @@ const validateLike = [
 
 // Helper function to handle validation errors
 const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
+  const errors = [];
+  
+  if (!req.body.type || !['post', 'comment'].includes(req.body.type)) {
+    errors.push('Type must be either "post" or "comment"');
+  }
+  
+  if (errors.length > 0) {
     return res.status(400).json({
       success: false,
       error: {
         code: 'VALIDATION_ERROR',
-        message: 'Validation failed',
-        details: errors.array()
+        message: errors.join(', ')
       }
     });
   }
+  
   next();
 };
 
-// POST /api/v1/likes - Like a post or comment
-router.post('/', 
-  authenticate, 
-  likeRateLimit, 
-  validateLike, 
-  handleValidationErrors, 
-  async (req, res) => {
-    try {
-      const { targetId, type } = req.body;
-      const userId = req.user._id;
-
-      // Check if target exists
-      let target;
-      if (type === 'post') {
-        target = await Post.findById(targetId);
-      } else if (type === 'comment') {
-        target = await Comment.findById(targetId);
-      }
-
-      if (!target) {
-        return res.status(404).json({
-          success: false,
-          error: {
-            code: 'TARGET_NOT_FOUND',
-            message: `${type} not found`
-          }
-        });
-      }
-
-      // Check if already liked
-      const existingLike = await Like.findOne({
-        user: userId,
-        [type]: targetId,
-        type
-      });
-
-      if (existingLike) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'ALREADY_LIKED',
-            message: `Already liked this ${type}`
-          }
-        });
-      }
-
-      // Add like
-      const like = await Like.addLike(userId, targetId, type);
-
-      res.status(201).json({
-        success: true,
-        data: { like },
-        message: `${type} liked successfully`
-      });
-
-    } catch (error) {
-      console.error('Like creation error:', error);
-      res.status(500).json({
-        success: false,
-        error: {
-          code: 'LIKE_CREATION_ERROR',
-          message: 'Failed to like'
-        }
-      });
-    }
-  }
-);
-
-// DELETE /api/v1/likes/:targetId - Unlike a post or comment
-router.delete('/:targetId', 
-  authenticate, 
-  validateLike, 
-  handleValidationErrors, 
-  async (req, res) => {
-    try {
-      const { targetId } = req.params;
-      const { type } = req.query;
-      const userId = req.user._id;
-
-      // Validate type
-      if (!type || !['post', 'comment'].includes(type)) {
-        return res.status(400).json({
-          success: false,
-          error: {
-            code: 'INVALID_TYPE',
-            message: 'Type must be either "post" or "comment"'
-          }
-        });
-      }
-
-      // Check if target exists
-      let target;
-      if (type === 'post') {
-        target = await Post.findById(targetId);
-      } else if (type === 'comment') {
-        target = await Comment.findById(targetId);
-      }
-
-      if (!target) {
-        return res.status(404).json({
-          success: false,
-          error: {
-            code: 'TARGET_NOT_FOUND',
-            message: `${type} not found`
-          }
-        });
-      }
-
-      // Remove like
-      const like = await Like.removeLike(userId, targetId, type);
-
-      if (!like) {
-        return res.status(404).json({
-          success: false,
-          error: {
-            code: 'LIKE_NOT_FOUND',
-            message: `Like not found for this ${type}`
-          }
-        });
-      }
-
-      res.json({
-        success: true,
-        message: `${type} unliked successfully`
-      });
-
-    } catch (error) {
-      console.error('Unlike error:', error);
-      res.status(500).json({
-        success: false,
-        error: {
-          code: 'UNLIKE_ERROR',
-          message: 'Failed to unlike'
-        }
-      });
-    }
-  }
-);
-
-// GET /api/v1/likes/:targetId - Get likes for a post or comment
-router.get('/:targetId', authenticate, async (req, res) => {
+// POST /api/v1/likes/:targetId/toggle - Toggle like/unlike (Primary endpoint)
+router.post('/:targetId/toggle', authenticate, handleValidationErrors, async (req, res) => {
   try {
     const { targetId } = req.params;
-    const { type, page = 1, limit = 20 } = req.query;
-
-    // Validate type
-    if (!type || !['post', 'comment'].includes(type)) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_TYPE',
-          message: 'Type must be either "post" or "comment"'
-        }
-      });
-    }
-
-    // Check if target exists
+    const { type } = req.body;
+    const currentUserId = req.user._id;
+    
+    // Validate target exists
     let target;
     if (type === 'post') {
       target = await Post.findById(targetId);
     } else if (type === 'comment') {
       target = await Comment.findById(targetId);
     }
-
+    
     if (!target) {
       return res.status(404).json({
         success: false,
@@ -220,19 +62,77 @@ router.get('/:targetId', authenticate, async (req, res) => {
         }
       });
     }
+    
+    // Use the new toggle method
+    const result = await Like.toggleLike(currentUserId, targetId, type);
+    
+    res.json({
+      success: true,
+      data: {
+        isLiked: result.isLiked,
+        like: result.like
+      },
+      message: result.isLiked ? `${type} liked successfully` : `${type} unliked successfully`
+    });
+    
+  } catch (error) {
+    console.error('Like toggle error:', error && error.stack ? error.stack : error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'LIKE_TOGGLE_ERROR',
+        message: 'Failed to toggle like'
+      }
+    });
+  }
+});
 
+// GET /api/v1/likes/:targetId - Get likes for a target
+router.get('/:targetId', authenticate, async (req, res) => {
+  try {
+    const { targetId } = req.params;
+    const { type, page = 1, limit = 20 } = req.query;
+    
+    if (!type || !['post', 'comment'].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_TYPE',
+          message: 'Type must be either "post" or "comment"'
+        }
+      });
+    }
+    
+    // Validate target exists
+    let target;
+    if (type === 'post') {
+      target = await Post.findById(targetId);
+    } else if (type === 'comment') {
+      target = await Comment.findById(targetId);
+    }
+    
+    if (!target) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'TARGET_NOT_FOUND',
+          message: `${type} not found`
+        }
+      });
+    }
+    
     // Get likes
     const result = await Like.getLikes(targetId, type, {
       page: parseInt(page),
       limit: parseInt(limit)
     });
-
+    
     res.json({
       success: true,
       data: result,
       message: 'Likes retrieved successfully'
     });
-
+    
   } catch (error) {
     console.error('Likes retrieval error:', error);
     res.status(500).json({
@@ -251,8 +151,7 @@ router.get('/check/:targetId', authenticate, async (req, res) => {
     const { targetId } = req.params;
     const { type } = req.query;
     const userId = req.user._id;
-
-    // Validate type
+    
     if (!type || !['post', 'comment'].includes(type)) {
       return res.status(400).json({
         success: false,
@@ -262,7 +161,7 @@ router.get('/check/:targetId', authenticate, async (req, res) => {
         }
       });
     }
-
+    
     // Check if target exists
     let target;
     if (type === 'post') {
@@ -270,7 +169,7 @@ router.get('/check/:targetId', authenticate, async (req, res) => {
     } else if (type === 'comment') {
       target = await Comment.findById(targetId);
     }
-
+    
     if (!target) {
       return res.status(404).json({
         success: false,
@@ -280,16 +179,16 @@ router.get('/check/:targetId', authenticate, async (req, res) => {
         }
       });
     }
-
+    
     // Check if liked
     const isLiked = await Like.isLikedBy(userId, targetId, type);
-
+    
     res.json({
       success: true,
       data: { isLiked },
       message: 'Like status retrieved successfully'
     });
-
+    
   } catch (error) {
     console.error('Like check error:', error);
     res.status(500).json({
@@ -308,15 +207,15 @@ router.get('/user/:userId', authenticate, async (req, res) => {
     const { userId } = req.params;
     const { type, page = 1, limit = 20 } = req.query;
     const currentUserId = req.user._id;
-
+    
     // Build query
     let query = { user: userId };
     if (type && ['post', 'comment'].includes(type)) {
       query.type = type;
     }
-
+    
     const skip = (parseInt(page) - 1) * parseInt(limit);
-
+    
     // Get likes
     const likes = await Like.find(query)
       .populate('post', 'content author createdAt')
@@ -326,9 +225,9 @@ router.get('/user/:userId', authenticate, async (req, res) => {
       .limit(parseInt(limit))
       .skip(skip)
       .lean();
-
+    
     const total = await Like.countDocuments(query);
-
+    
     res.json({
       success: true,
       data: {
@@ -344,7 +243,7 @@ router.get('/user/:userId', authenticate, async (req, res) => {
       },
       message: 'User likes retrieved successfully'
     });
-
+    
   } catch (error) {
     console.error('User likes retrieval error:', error);
     res.status(500).json({
@@ -357,27 +256,21 @@ router.get('/user/:userId', authenticate, async (req, res) => {
   }
 });
 
-// Alias: POST /api/v1/likes/:targetId
-router.post('/:targetId', authenticate, likeRateLimit, async (req, res) => {
+// Legacy endpoints for backward compatibility
+// POST /api/v1/likes/:targetId - Add like (legacy)
+router.post('/:targetId', authenticate, handleValidationErrors, async (req, res) => {
   try {
     const { targetId } = req.params;
     const { type } = req.body;
     const currentUserId = req.user._id;
-    if (!type || !['post', 'comment'].includes(type)) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_TYPE',
-          message: 'Type must be either "post" or "comment"'
-        }
-      });
-    }
+    
     let target;
     if (type === 'post') {
       target = await Post.findById(targetId);
     } else if (type === 'comment') {
       target = await Comment.findById(targetId);
     }
+    
     if (!target) {
       return res.status(404).json({
         success: false,
@@ -387,33 +280,84 @@ router.post('/:targetId', authenticate, likeRateLimit, async (req, res) => {
         }
       });
     }
-    const existingLike = await Like.findOne({
-      user: currentUserId,
-      [type]: targetId,
-      type
-    });
-    if (existingLike) {
-      return res.status(400).json({
+    
+    const result = await Like.toggleLike(currentUserId, targetId, type);
+    
+    if (!result.isLiked) {
+      return res.status(409).json({
         success: false,
         error: {
           code: 'ALREADY_LIKED',
-          message: `Already liked this ${type}`
+          message: 'Already liked this item'
         }
       });
     }
-    const like = await Like.addLike(currentUserId, targetId, type);
+    
     res.status(201).json({
       success: true,
-      data: { like },
+      data: { like: result.like },
       message: `${type} liked successfully`
     });
   } catch (error) {
-    console.error('Like creation error (alias route):', error);
+    console.error('Like creation error:', error);
     res.status(500).json({
       success: false,
       error: {
         code: 'LIKE_CREATION_ERROR',
-        message: 'Failed to like (alias route)'
+        message: 'Failed to like'
+      }
+    });
+  }
+});
+
+// DELETE /api/v1/likes/:targetId - Remove like (legacy)
+router.delete('/:targetId', authenticate, handleValidationErrors, async (req, res) => {
+  try {
+    const { targetId } = req.params;
+    const { type } = req.body;
+    const currentUserId = req.user._id;
+    
+    let target;
+    if (type === 'post') {
+      target = await Post.findById(targetId);
+    } else if (type === 'comment') {
+      target = await Comment.findById(targetId);
+    }
+    
+    if (!target) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'TARGET_NOT_FOUND',
+          message: `${type} not found`
+        }
+      });
+    }
+    
+    const result = await Like.toggleLike(currentUserId, targetId, type);
+    
+    if (result.isLiked) {
+      return res.status(409).json({
+        success: false,
+        error: {
+          code: 'NOT_LIKED',
+          message: 'Item is not liked'
+        }
+      });
+    }
+    
+    res.json({
+      success: true,
+      data: { like: result.like },
+      message: `${type} unliked successfully`
+    });
+  } catch (error) {
+    console.error('Like removal error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'LIKE_REMOVAL_ERROR',
+        message: 'Failed to unlike'
       }
     });
   }

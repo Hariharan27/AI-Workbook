@@ -13,6 +13,8 @@ import SearchPage from './pages/SearchPage';
 import ProfilePage from './pages/ProfilePage';
 import HashtagPage from './pages/HashtagPage';
 import NotificationsPage from './pages/NotificationsPage';
+import MessagesPage from './pages/MessagesPage';
+import PeoplePage from './pages/PeoplePage';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
 import './App.css';
@@ -31,6 +33,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // FeedPage Wrapper to handle post creation
 const FeedPageWrapper: React.FC = () => {
   const [showPostEditor, setShowPostEditor] = React.useState(false);
+  const { user } = useAuth();
   
   const handleCreatePost = () => {
     setShowPostEditor(true);
@@ -38,7 +41,44 @@ const FeedPageWrapper: React.FC = () => {
   
   return (
     <Layout onCreatePost={handleCreatePost}>
-      <FeedPage showPostEditor={showPostEditor} setShowPostEditor={setShowPostEditor} />
+      <FeedPage 
+        currentUserId={user?._id}
+        showPostEditor={showPostEditor} 
+        setShowPostEditor={setShowPostEditor} 
+      />
+    </Layout>
+  );
+};
+
+// ProfilePage Wrapper to pass currentUserId
+const ProfilePageWrapper: React.FC = () => {
+  const { user } = useAuth();
+  
+  return (
+    <Layout>
+      <ProfilePage currentUserId={user?._id} />
+    </Layout>
+  );
+};
+
+// HashtagPage Wrapper to pass currentUserId
+const HashtagPageWrapper: React.FC = () => {
+  const { user } = useAuth();
+  
+  return (
+    <Layout>
+      <HashtagPage currentUserId={user?._id} />
+    </Layout>
+  );
+};
+
+// NotificationsPage Wrapper to pass currentUserId
+const NotificationsPageWrapper: React.FC = () => {
+  const { user } = useAuth();
+  
+  return (
+    <Layout>
+      <NotificationsPage currentUserId={user?._id} />
     </Layout>
   );
 };
@@ -92,22 +132,30 @@ const AppContent: React.FC = () => {
         } />
         <Route path="/profile/:userId?" element={
           <ProtectedRoute>
-            <Layout>
-              <ProfilePage />
-            </Layout>
+            <ProfilePageWrapper />
           </ProtectedRoute>
         } />
         <Route path="/hashtag/:hashtagName" element={
           <ProtectedRoute>
-            <Layout>
-              <HashtagPage />
-            </Layout>
+            <HashtagPageWrapper />
           </ProtectedRoute>
         } />
         <Route path="/notifications" element={
           <ProtectedRoute>
+            <NotificationsPageWrapper />
+          </ProtectedRoute>
+        } />
+        <Route path="/messages" element={
+          <ProtectedRoute>
             <Layout>
-              <NotificationsPage />
+              <MessagesPage />
+            </Layout>
+          </ProtectedRoute>
+        } />
+        <Route path="/people" element={
+          <ProtectedRoute>
+            <Layout>
+              <PeoplePage />
             </Layout>
           </ProtectedRoute>
         } />

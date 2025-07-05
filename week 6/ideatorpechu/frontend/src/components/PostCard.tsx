@@ -29,7 +29,14 @@ import {
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { Post } from '../services/api';
+import { Post, likesAPI, User } from '../services/api';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import List from '@mui/material/List';
+import ListItem from '@mui/material/ListItem';
+import ListItemAvatar from '@mui/material/ListItemAvatar';
+import CircularProgress from '@mui/material/CircularProgress';
 
 interface PostCardProps {
   post: Post;
@@ -55,6 +62,9 @@ const PostCard: React.FC<PostCardProps> = ({
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [isLiked, setIsLiked] = useState(post.isLiked);
+  const [likesModalOpen, setLikesModalOpen] = useState(false);
+  const [likesLoading, setLikesLoading] = useState(false);
+  const [likesUsers, setLikesUsers] = useState<User[]>([]);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -106,6 +116,24 @@ const PostCard: React.FC<PostCardProps> = ({
 
   const isAuthor = currentUserId === post.author._id;
 
+  const handleOpenLikesModal = async () => {
+    setLikesModalOpen(true);
+    setLikesLoading(true);
+    try {
+      const res = await likesAPI.getPostLikes(post._id);
+      setLikesUsers(res.users);
+    } catch (err) {
+      setLikesUsers([]);
+    } finally {
+      setLikesLoading(false);
+    }
+  };
+
+  const handleCloseLikesModal = () => {
+    setLikesModalOpen(false);
+    setLikesUsers([]);
+  };
+
   return (
     <Card sx={{ mb: 2, borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
       {/* Post Header */}
@@ -114,7 +142,12 @@ const PostCard: React.FC<PostCardProps> = ({
           <Box display="flex" alignItems="center" sx={{ cursor: 'pointer' }} onClick={() => handleUserClick(post.author._id)}>
             <Avatar
               src={post.author.avatar}
-              sx={{ width: 40, height: 40, mr: 2 }}
+              sx={{ 
+                width: 40, 
+                height: 40, 
+                mr: 2,
+                bgcolor: `hsl(${(post.author.username?.charCodeAt(0) || 0) * 7 % 360}, 70%, 50%)`
+              }}
             >
               {post.author.firstName?.[0]}{post.author.lastName?.[0]}
             </Avatar>
@@ -232,7 +265,10 @@ const PostCard: React.FC<PostCardProps> = ({
       <CardContent sx={{ py: 1 }}>
         <Box display="flex" justifyContent="space-between" alignItems="center">
           <Typography variant="body2" color="text.secondary">
-            {post.likes} likes • {post.comments} comments • {post.shares} shares
+            <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={handleOpenLikesModal}>
+              {post.stats.likesCount} likes
+            </span>
+            {' • '}{post.stats.commentsCount} comments • {post.stats.sharesCount} shares
           </Typography>
           {!post.isPublic && (
             <Chip label="Private" size="small" color="warning" />
@@ -308,6 +344,36 @@ const PostCard: React.FC<PostCardProps> = ({
           <ListItemText>Report Post</ListItemText>
         </MenuItem>
       </Menu>
+
+      {/* Likes Modal */}
+      <Dialog open={likesModalOpen} onClose={handleCloseLikesModal} maxWidth="xs" fullWidth>
+        <DialogTitle>Liked by</DialogTitle>
+        <DialogContent>
+          {likesLoading ? (
+            <Box display="flex" justifyContent="center" p={2}><CircularProgress /></Box>
+          ) : likesUsers.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" align="center" py={2}>
+              No likes yet
+            </Typography>
+          ) : (
+            <List>
+              {likesUsers.map(user => (
+                <ListItem key={user._id}>
+                  <ListItemAvatar>
+                    <Avatar src={user.avatar}>
+                      {user.firstName?.[0]}{user.lastName?.[0]}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={`${user.firstName} ${user.lastName}`}
+                    secondary={`@${user.username}`}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
