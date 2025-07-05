@@ -5,13 +5,16 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const http = require('http');
 
 // Import configurations and services
 const connectDB = require('./config/database');
 const redisClient = require('./config/redis');
+const socketService = require('./services/socketService');
 
 // Import routes
 const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
 const postRoutes = require('./routes/posts');
 const commentRoutes = require('./routes/comments');
 const likeRoutes = require('./routes/likes');
@@ -20,6 +23,7 @@ const searchRoutes = require('./routes/search');
 const shareRoutes = require('./routes/shares');
 const moderationRoutes = require('./routes/moderation');
 const notificationRoutes = require('./routes/notifications');
+const messageRoutes = require('./routes/messages');
 
 // Import middleware
 const { authenticate } = require('./middleware/authenticate');
@@ -30,6 +34,7 @@ const Like = require('./models/Like');
 const Relationship = require('./models/Relationship');
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
 
 // Connect to databases
@@ -111,6 +116,7 @@ app.get('/health', (req, res) => {
 
 // API routes
 app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/posts', postRoutes);
 app.use('/api/v1/comments', commentRoutes);
 app.use('/api/v1/likes', likeRoutes);
@@ -170,12 +176,9 @@ app.get('/api/v1/feed', authenticate, async (req, res) => {
   }
 });
 
-// Protected routes (will be added in future phases)
-// app.use('/api/v1/users', authenticate, userRoutes);
-// app.use('/api/v1/messages', authenticate, messageRoutes);
+// Protected routes
+app.use('/api/v1/messages', authenticate, messageRoutes);
 app.use('/api/v1/notifications', authenticate, notificationRoutes);
-// app.use('/api/v1/search', authenticate, searchRoutes);
-// app.use('/api/v1/media', authenticate, mediaRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -183,7 +186,7 @@ app.get('/', (req, res) => {
     success: true,
     message: 'Welcome to IdeatorPechu API',
     version: '1.0.0',
-    phase: '2B - Content Management System',
+    phase: '2C - Real-Time Communication',
     endpoints: {
       auth: '/api/v1/auth',
       posts: '/api/v1/posts',
@@ -193,6 +196,8 @@ app.get('/', (req, res) => {
       search: '/api/v1/search',
       shares: '/api/v1/shares',
       moderation: '/api/v1/moderation',
+      messages: '/api/v1/messages',
+      notifications: '/api/v1/notifications',
       health: '/health'
     },
     documentation: 'Coming soon...'
@@ -319,16 +324,20 @@ process.on('unhandledRejection', (reason, promise) => {
 const startServer = async () => {
   await initializeApp();
   
-  app.listen(PORT, () => {
+  // Initialize Socket.io
+  socketService.initialize(server);
+  
+  server.listen(PORT, () => {
     console.log(`
 ╔══════════════════════════════════════════════════════════════╗
 ║                    IDEATORPECHU API                          ║
 ╠══════════════════════════════════════════════════════════════╣
 ║  🚀 Server running on port ${PORT}                           ║
 ║  🌍 Environment: ${process.env.NODE_ENV || 'development'}     ║
-║  📊 Phase: 2A - User Management & Authentication             ║
+║  📊 Phase: 2C - Real-Time Communication                     ║
 ║  🔗 Health Check: http://localhost:${PORT}/health            ║
 ║  📚 API Base: http://localhost:${PORT}/api/v1               ║
+║  🔌 Socket.io: ws://localhost:${PORT}                       ║
 ╚══════════════════════════════════════════════════════════════╝
     `);
   });

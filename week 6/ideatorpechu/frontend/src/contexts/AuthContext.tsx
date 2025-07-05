@@ -51,13 +51,16 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         error: null,
       };
     case 'AUTH_FAILURE':
-      return {
+      console.log('AUTH_FAILURE reducer called with payload:', action.payload);
+      const newState = {
         ...state,
         user: null,
         isAuthenticated: false,
         isLoading: false,
         error: action.payload,
       };
+      console.log('New state after AUTH_FAILURE:', newState);
+      return newState;
     case 'AUTH_LOGOUT':
       return {
         ...state,
@@ -67,6 +70,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         error: null,
       };
     case 'CLEAR_ERROR':
+      console.log('CLEAR_ERROR reducer called');
       return {
         ...state,
         error: null,
@@ -115,13 +119,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = useCallback(async (email: string, password: string) => {
     try {
+      console.log('Login attempt started for:', email);
       dispatch({ type: 'AUTH_START' });
       
+      console.log('Calling authAPI.login...');
       const response = await authAPI.login({ email, password });
+      console.log('Login response received:', response);
+      
       localStorage.setItem('token', response.token);
+      console.log('Token stored in localStorage');
+      
       dispatch({ type: 'AUTH_SUCCESS', payload: response.user });
+      console.log('Login successful, user authenticated');
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Login failed';
+      console.error('Login error:', error);
+      console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
+      
+      // Extract error message from the response structure
+      let errorMessage = 'Login failed';
+      if (error.response?.data?.error?.message) {
+        errorMessage = error.response.data.error.message;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      
+      console.log('Setting error message:', errorMessage);
       dispatch({ type: 'AUTH_FAILURE', payload: errorMessage });
       throw error;
     }

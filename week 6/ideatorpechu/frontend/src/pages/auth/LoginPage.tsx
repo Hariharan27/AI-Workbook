@@ -44,23 +44,44 @@ const LoginPage: React.FC = () => {
     }
   }, [isAuthenticated, navigate]);
 
-  // Clear auth error when component mounts
-  useEffect(() => {
-    clearError();
-  }, []);
+  // Clear auth error when user starts typing
+  const handleInputChange = () => {
+    if (authError) {
+      console.log('User started typing - clearing error');
+      clearError();
+    }
+  };
 
   const onSubmit = async (data: LoginFormData) => {
+    console.log('LoginPage onSubmit called with data:', { email: data.email, password: '***' });
     setLoading(true);
     
     try {
+      console.log('Calling login function from AuthContext...');
       await login(data.email, data.password);
+      console.log('Login function completed successfully');
       // Navigation will be handled by useEffect when isAuthenticated changes
     } catch (err) {
+      console.error('LoginPage onSubmit error:', err);
       // Error is handled by auth context
     } finally {
       setLoading(false);
+      console.log('LoginPage onSubmit completed');
     }
   };
+
+  const handleFormSubmit = (e: React.FormEvent) => {
+    console.log('Form submit event triggered');
+    e.preventDefault();
+    handleSubmit(onSubmit, (errors) => {
+      console.error('Form validation errors:', errors);
+    })(e);
+  };
+
+  // Debug logging before render
+  console.log('LoginPage render - authError:', authError);
+  console.log('LoginPage render - isLoading:', isLoading);
+  console.log('LoginPage render - isAuthenticated:', isAuthenticated);
 
   return (
     <Box
@@ -121,7 +142,7 @@ const LoginPage: React.FC = () => {
               </Alert>
             )}
 
-            <form onSubmit={handleSubmit(onSubmit)}>
+            <form onSubmit={handleFormSubmit}>
               <TextField
                 {...register('email')}
                 fullWidth
@@ -131,6 +152,7 @@ const LoginPage: React.FC = () => {
                 margin="normal"
                 error={!!errors.email}
                 helperText={errors.email?.message}
+                onChange={handleInputChange}
                 sx={{ marginBottom: 2 }}
               />
 
@@ -143,6 +165,7 @@ const LoginPage: React.FC = () => {
                 margin="normal"
                 error={!!errors.password}
                 helperText={errors.password?.message}
+                onChange={handleInputChange}
                 sx={{ marginBottom: 3 }}
               />
 
@@ -152,6 +175,9 @@ const LoginPage: React.FC = () => {
                 variant="contained"
                 size="large"
                 disabled={loading || isLoading}
+                onClick={() => {
+                  console.log('Login button clicked');
+                }}
                 sx={{
                   height: 48,
                   fontSize: '1.1rem',

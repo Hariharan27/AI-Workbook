@@ -27,6 +27,9 @@ let userId;
 let postId;
 let commentId;
 let hashtagId;
+let conversationId;
+let groupConversationId;
+let messageId;
 
 // Helper function to log test results
 const logTest = (testName, success, details = '') => {
@@ -607,8 +610,293 @@ const runAPIFlowTest = async () => {
     logTest('Delete Post', false, `Error: ${error.message}`);
   }
 
-  // 29. USER LOGOUT
-  console.log('\n📋 29. User Logout');
+  // 29. GET CONVERSATIONS
+  console.log('\n📋 29. Get Conversations');
+  console.log('------------------------');
+  
+  try {
+    const conversationsResponse = await authenticatedRequest('GET', '/api/v1/messages/conversations');
+    
+    const conversationsSuccess = logTest(
+      'Get Conversations',
+      conversationsResponse.status === 200 && conversationsResponse.body.success,
+      `Status: ${conversationsResponse.status}`
+    );
+    allTestsPassed = allTestsPassed && conversationsSuccess;
+  } catch (error) {
+    allTestsPassed = false;
+    logTest('Get Conversations', false, `Error: ${error.message}`);
+  }
+
+  // 30. CREATE DIRECT CONVERSATION
+  console.log('\n📋 30. Create Direct Conversation');
+  console.log('----------------------------------');
+  
+  try {
+    // First, we need another user to create a conversation with
+    // For testing, we'll create a second user
+    const secondUser = {
+      username: 'testuser2_' + Date.now(),
+      email: `test2${Date.now()}@example.com`,
+      password: 'TestPassword123!',
+      firstName: 'Test2',
+      lastName: 'User2'
+    };
+
+    // Register second user
+    const secondUserRegisterResponse = await request(app)
+      .post('/api/v1/auth/register')
+      .send(secondUser);
+
+    let secondUserId;
+    if (secondUserRegisterResponse.status === 201) {
+      secondUserId = secondUserRegisterResponse.body.data.user._id;
+    } else {
+      // If registration fails (e.g., user exists), try to get user ID from database
+      const User = require('../models/User');
+      const existingUser = await User.findOne({ email: secondUser.email });
+      secondUserId = existingUser?._id;
+    }
+
+    if (secondUserId) {
+      const directConversationResponse = await authenticatedRequest('POST', '/api/v1/messages/conversations/direct', {
+        participantId: secondUserId
+      });
+      
+      const directConversationSuccess = logTest(
+        'Create Direct Conversation',
+        directConversationResponse.status === 200 && directConversationResponse.body.success,
+        `Status: ${directConversationResponse.status}`
+      );
+      allTestsPassed = allTestsPassed && directConversationSuccess;
+
+      if (directConversationSuccess && directConversationResponse.body.data.conversation) {
+        conversationId = directConversationResponse.body.data.conversation._id;
+        console.log(`   Conversation ID: ${conversationId}`);
+      }
+    } else {
+      logTest('Create Direct Conversation', false, 'Could not create or find second user');
+      allTestsPassed = false;
+    }
+  } catch (error) {
+    allTestsPassed = false;
+    logTest('Create Direct Conversation', false, `Error: ${error.message}`);
+  }
+
+  // 31. CREATE GROUP CONVERSATION
+  console.log('\n📋 31. Create Group Conversation');
+  console.log('--------------------------------');
+  
+  try {
+    // Get a few users for group conversation
+    const User = require('../models/User');
+    const users = await User.find({}).limit(3);
+    
+    if (users.length >= 2) {
+      const participantIds = users.map(u => u._id.toString()).filter(id => id !== userId);
+      
+      const groupConversationResponse = await authenticatedRequest('POST', '/api/v1/messages/conversations/group', {
+        participants: participantIds,
+        name: 'Test Group Chat',
+        description: 'A test group conversation'
+      });
+      
+      const groupConversationSuccess = logTest(
+        'Create Group Conversation',
+        groupConversationResponse.status === 201 && groupConversationResponse.body.success,
+        `Status: ${groupConversationResponse.status}`
+      );
+      allTestsPassed = allTestsPassed && groupConversationSuccess;
+
+      if (groupConversationSuccess && groupConversationResponse.body.data.conversation) {
+        groupConversationId = groupConversationResponse.body.data.conversation._id;
+        console.log(`   Group Conversation ID: ${groupConversationId}`);
+      }
+    } else {
+      logTest('Create Group Conversation', false, 'Not enough users for group conversation');
+      allTestsPassed = false;
+    }
+  } catch (error) {
+    allTestsPassed = false;
+    logTest('Create Group Conversation', false, `Error: ${error.message}`);
+  }
+
+  // 32. GET CONVERSATION WITH MESSAGES
+  console.log('\n📋 32. Get Conversation with Messages');
+  console.log('-------------------------------------');
+  
+  try {
+    if (conversationId) {
+      const conversationResponse = await authenticatedRequest('GET', `/api/v1/messages/conversations/${conversationId}`);
+      
+      const conversationSuccess = logTest(
+        'Get Conversation with Messages',
+        conversationResponse.status === 200 && conversationResponse.body.success,
+        `Status: ${conversationResponse.status}`
+      );
+      allTestsPassed = allTestsPassed && conversationSuccess;
+    } else {
+      logTest('Get Conversation with Messages', false, 'No conversation ID available');
+      allTestsPassed = false;
+    }
+  } catch (error) {
+    allTestsPassed = false;
+    logTest('Get Conversation with Messages', false, `Error: ${error.message}`);
+  }
+
+  // 33. SEND MESSAGE
+  console.log('\n📋 33. Send Message');
+  console.log('-------------------');
+  
+  try {
+    if (conversationId) {
+      const sendMessageResponse = await authenticatedRequest('POST', `/api/v1/messages/conversations/${conversationId}/messages`, {
+        content: 'Hello! This is a test message from the API flow test.',
+        messageType: 'text'
+      });
+      
+      const sendMessageSuccess = logTest(
+        'Send Message',
+        sendMessageResponse.status === 201 && sendMessageResponse.body.success,
+        `Status: ${sendMessageResponse.status}`
+      );
+      allTestsPassed = allTestsPassed && sendMessageSuccess;
+
+      if (sendMessageSuccess && sendMessageResponse.body.data.message) {
+        messageId = sendMessageResponse.body.data.message._id;
+        console.log(`   Message ID: ${messageId}`);
+      }
+    } else {
+      logTest('Send Message', false, 'No conversation ID available');
+      allTestsPassed = false;
+    }
+  } catch (error) {
+    allTestsPassed = false;
+    logTest('Send Message', false, `Error: ${error.message}`);
+  }
+
+  // 34. SEND GROUP MESSAGE
+  console.log('\n📋 34. Send Group Message');
+  console.log('-------------------------');
+  
+  try {
+    if (groupConversationId) {
+      const groupMessageResponse = await authenticatedRequest('POST', `/api/v1/messages/conversations/${groupConversationId}/messages`, {
+        content: 'Hello everyone! This is a test group message.',
+        messageType: 'text'
+      });
+      
+      const groupMessageSuccess = logTest(
+        'Send Group Message',
+        groupMessageResponse.status === 201 && groupMessageResponse.body.success,
+        `Status: ${groupMessageResponse.status}`
+      );
+      allTestsPassed = allTestsPassed && groupMessageSuccess;
+    } else {
+      logTest('Send Group Message', false, 'No group conversation ID available');
+      allTestsPassed = false;
+    }
+  } catch (error) {
+    allTestsPassed = false;
+    logTest('Send Group Message', false, `Error: ${error.message}`);
+  }
+
+  // 35. MARK MESSAGES AS READ
+  console.log('\n📋 35. Mark Messages as Read');
+  console.log('----------------------------');
+  
+  try {
+    if (conversationId && messageId) {
+      const markReadResponse = await authenticatedRequest('PUT', `/api/v1/messages/conversations/${conversationId}/messages/read`, {
+        messageIds: [messageId]
+      });
+      
+      const markReadSuccess = logTest(
+        'Mark Messages as Read',
+        markReadResponse.status === 200 && markReadResponse.body.success,
+        `Status: ${markReadResponse.status}`
+      );
+      allTestsPassed = allTestsPassed && markReadSuccess;
+    } else {
+      logTest('Mark Messages as Read', false, 'No conversation or message ID available');
+      allTestsPassed = false;
+    }
+  } catch (error) {
+    allTestsPassed = false;
+    logTest('Mark Messages as Read', false, `Error: ${error.message}`);
+  }
+
+  // 36. TOGGLE CONVERSATION MUTE
+  console.log('\n📋 36. Toggle Conversation Mute');
+  console.log('-------------------------------');
+  
+  try {
+    if (conversationId) {
+      const muteResponse = await authenticatedRequest('PUT', `/api/v1/messages/conversations/${conversationId}/mute`);
+      
+      const muteSuccess = logTest(
+        'Toggle Conversation Mute',
+        muteResponse.status === 200 && muteResponse.body.success,
+        `Status: ${muteResponse.status}`
+      );
+      allTestsPassed = allTestsPassed && muteSuccess;
+    } else {
+      logTest('Toggle Conversation Mute', false, 'No conversation ID available');
+      allTestsPassed = false;
+    }
+  } catch (error) {
+    allTestsPassed = false;
+    logTest('Toggle Conversation Mute', false, `Error: ${error.message}`);
+  }
+
+  // 37. ARCHIVE CONVERSATION
+  console.log('\n📋 37. Archive Conversation');
+  console.log('----------------------------');
+  
+  try {
+    if (conversationId) {
+      const archiveResponse = await authenticatedRequest('PUT', `/api/v1/messages/conversations/${conversationId}/archive`);
+      
+      const archiveSuccess = logTest(
+        'Archive Conversation',
+        archiveResponse.status === 200 && archiveResponse.body.success,
+        `Status: ${archiveResponse.status}`
+      );
+      allTestsPassed = allTestsPassed && archiveSuccess;
+    } else {
+      logTest('Archive Conversation', false, 'No conversation ID available');
+      allTestsPassed = false;
+    }
+  } catch (error) {
+    allTestsPassed = false;
+    logTest('Archive Conversation', false, `Error: ${error.message}`);
+  }
+
+  // 38. DELETE MESSAGE
+  console.log('\n📋 38. Delete Message');
+  console.log('--------------------');
+  
+  try {
+    if (messageId) {
+      const deleteMessageResponse = await authenticatedRequest('DELETE', `/api/v1/messages/${messageId}`);
+      
+      const deleteMessageSuccess = logTest(
+        'Delete Message',
+        deleteMessageResponse.status === 200 && deleteMessageResponse.body.success,
+        `Status: ${deleteMessageResponse.status}`
+      );
+      allTestsPassed = allTestsPassed && deleteMessageSuccess;
+    } else {
+      logTest('Delete Message', false, 'No message ID available');
+      allTestsPassed = false;
+    }
+  } catch (error) {
+    allTestsPassed = false;
+    logTest('Delete Message', false, `Error: ${error.message}`);
+  }
+
+  // 39. USER LOGOUT
+  console.log('\n📋 39. User Logout');
   console.log('-------------------');
   
   try {
@@ -639,12 +927,13 @@ const runAPIFlowTest = async () => {
   }
 
   console.log('\n📊 Test Summary:');
-  console.log(`   - Total API Endpoints Tested: 29`);
+  console.log(`   - Total API Endpoints Tested: 39`);
   console.log(`   - Test User: ${testUser.username}`);
   console.log(`   - Test Email: ${testUser.email}`);
   console.log(`   - Authentication: ${authToken ? '✅ Working' : '❌ Failed'}`);
   console.log(`   - Post Creation: ${postId ? '✅ Working' : '❌ Failed'}`);
   console.log(`   - Comment System: ${commentId ? '✅ Working' : '❌ Failed'}`);
+  console.log(`   - Messaging System: ${conversationId ? '✅ Working' : '❌ Failed'}`);
 
   return allTestsPassed;
 };

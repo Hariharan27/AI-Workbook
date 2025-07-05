@@ -15,24 +15,45 @@ const api: AxiosInstance = axios.create({
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
+    console.log('Axios request interceptor - URL:', config.url);
+    console.log('Axios request interceptor - Method:', config.method);
+    console.log('Axios request interceptor - Data:', config.data);
+    
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('Auth token added to request');
     }
     return config;
   },
   (error) => {
+    console.error('Axios request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor to handle errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('Axios response interceptor - Status:', response.status);
+    console.log('Axios response interceptor - URL:', response.config.url);
+    return response;
+  },
   (error) => {
+    console.error('Axios response interceptor error:', error);
+    console.error('Error status:', error.response?.status);
+    console.error('Error data:', error.response?.data);
+    
+    // Only redirect to login for 401 errors on authenticated endpoints (not login/register)
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
+      const url = error.config?.url || '';
+      const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register');
+      
+      if (!isAuthEndpoint) {
+        // Only redirect for non-auth endpoints (expired token)
+        localStorage.removeItem('token');
         window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -137,7 +158,13 @@ export const authAPI = {
   },
 
   login: async (credentials: { email: string; password: string }): Promise<{ token: string; user: User }> => {
+    console.log('authAPI.login called with credentials:', { email: credentials.email, password: '***' });
+    console.log('Making POST request to:', `${API_BASE_URL}/auth/login`);
+    
     const response: AxiosResponse<{ success: boolean; data: { user: User; tokens: { accessToken: string } }; message: string }> = await api.post('/auth/login', credentials);
+    
+    console.log('authAPI.login response:', response.data);
+    
     return {
       token: response.data.data.tokens.accessToken,
       user: response.data.data.user
@@ -347,39 +374,39 @@ export const commentsAPI = {
 // Users API
 export const usersAPI = {
   getUser: async (userId: string): Promise<User> => {
-    const response: AxiosResponse<User> = await api.get(`/users/${userId}`);
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; data: { user: User }; message: string }> = await api.get(`/users/${userId}`);
+    return response.data.data.user;
   },
 
   getUserPosts: async (userId: string, page = 1, limit = 10): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ posts: Post[]; total: number; hasMore: boolean }> = await api.get(`/users/${userId}/posts`, {
+    const response: AxiosResponse<{ success: boolean; data: { posts: Post[]; total: number; hasMore: boolean }; message: string }> = await api.get(`/users/${userId}/posts`, {
       params: { page, limit }
     });
-    return response.data;
+    return response.data.data;
   },
 
   followUser: async (userId: string): Promise<{ message: string }> => {
-    const response: AxiosResponse<{ message: string }> = await api.post(`/users/${userId}/follow`);
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.post(`/users/${userId}/follow`);
+    return { message: response.data.message };
   },
 
   unfollowUser: async (userId: string): Promise<{ message: string }> => {
-    const response: AxiosResponse<{ message: string }> = await api.delete(`/users/${userId}/follow`);
-    return response.data;
+    const response: AxiosResponse<{ success: boolean; message: string }> = await api.delete(`/users/${userId}/follow`);
+    return { message: response.data.message };
   },
 
   getFollowers: async (userId: string, page = 1, limit = 20): Promise<{ users: User[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ users: User[]; total: number; hasMore: boolean }> = await api.get(`/users/${userId}/followers`, {
+    const response: AxiosResponse<{ success: boolean; data: { users: User[]; total: number; hasMore: boolean }; message: string }> = await api.get(`/users/${userId}/followers`, {
       params: { page, limit }
     });
-    return response.data;
+    return response.data.data;
   },
 
   getFollowing: async (userId: string, page = 1, limit = 20): Promise<{ users: User[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ users: User[]; total: number; hasMore: boolean }> = await api.get(`/users/${userId}/following`, {
+    const response: AxiosResponse<{ success: boolean; data: { users: User[]; total: number; hasMore: boolean }; message: string }> = await api.get(`/users/${userId}/following`, {
       params: { page, limit }
     });
-    return response.data;
+    return response.data.data;
   }
 };
 
