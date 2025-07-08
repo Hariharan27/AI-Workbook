@@ -203,6 +203,16 @@ class SocketService {
     }
   }
 
+  sendMessage(messageData: {
+    conversationId: string;
+    content: string;
+    messageType: 'text' | 'image' | 'video' | 'file' | 'audio';
+  }) {
+    if (this.messagingSocket) {
+      this.messagingSocket.emit('message:send', messageData);
+    }
+  }
+
   // Event listeners
   onMessageReceived(callback: (message: SocketMessage) => void) {
     this.messageListeners.push(callback);

@@ -129,6 +129,7 @@ export interface Comment {
   parentComment?: string;
   replies?: Comment[];
   likes: string[]; // Array of user IDs who liked the comment
+  likesCount?: number; // Actual like count from backend
   isLiked: boolean;
   createdAt: string;
   updatedAt: string;
@@ -276,7 +277,7 @@ export const postsAPI = {
   }): Promise<Post> => {
     const formData = new FormData();
     formData.append('content', postData.content);
-    formData.append('isPublic', postData.isPublic.toString());
+    formData.append('isPublic', postData.isPublic ? 'true' : 'false');
     
     if (postData.media) {
       postData.media.forEach(file => formData.append('media', file));
@@ -325,18 +326,20 @@ export const postsAPI = {
 // Likes API
 export const likesAPI = {
   // Primary method - use this for all like/unlike operations
-  togglePostLike: async (postId: string): Promise<{ isLiked: boolean; message: string }> => {
-    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean }; message: string }> = await api.post(`/likes/${postId}/toggle`, { type: 'post' });
+  togglePostLike: async (postId: string): Promise<{ isLiked: boolean; likesCount: number; message: string }> => {
+    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean; likesCount: number }; message: string }> = await api.post(`/likes/${postId}/toggle`, { type: 'post' });
     return { 
       isLiked: response.data.data.isLiked,
+      likesCount: response.data.data.likesCount,
       message: response.data.message 
     };
   },
 
-  toggleCommentLike: async (commentId: string): Promise<{ isLiked: boolean; message: string }> => {
-    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean }; message: string }> = await api.post(`/likes/${commentId}/toggle`, { type: 'comment' });
+  toggleCommentLike: async (commentId: string): Promise<{ isLiked: boolean; likesCount: number; message: string }> => {
+    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean; likesCount: number }; message: string }> = await api.post(`/likes/${commentId}/toggle`, { type: 'comment' });
     return { 
       isLiked: response.data.data.isLiked,
+      likesCount: response.data.data.likesCount,
       message: response.data.message 
     };
   },

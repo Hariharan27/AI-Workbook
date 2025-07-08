@@ -66,11 +66,21 @@ router.post('/:targetId/toggle', authenticate, handleValidationErrors, async (re
     // Use the new toggle method
     const result = await Like.toggleLike(currentUserId, targetId, type);
     
+    // Recalculate like count to ensure accuracy
+    let actualLikeCount;
+    if (type === 'post') {
+      actualLikeCount = await Post.recalculateLikeCount(targetId);
+    } else if (type === 'comment') {
+      actualLikeCount = await Like.countDocuments({ comment: targetId, type: 'comment' });
+      await Comment.findByIdAndUpdate(targetId, { likesCount: actualLikeCount });
+    }
+    
     res.json({
       success: true,
       data: {
         isLiked: result.isLiked,
-        like: result.like
+        like: result.like,
+        likesCount: actualLikeCount
       },
       message: result.isLiked ? `${type} liked successfully` : `${type} unliked successfully`
     });

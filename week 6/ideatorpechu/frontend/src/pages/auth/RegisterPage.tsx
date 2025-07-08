@@ -40,7 +40,7 @@ type RegisterFormData = yup.InferType<typeof schema>;
 
 const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
-  const { register: registerUser, error: authError, isLoading, isAuthenticated, clearError } = useAuth();
+  const { register: registerUser, error: authError, loading: authLoading, user, clearError } = useAuth();
   const [loading, setLoading] = useState<boolean>(false);
 
   const {
@@ -53,10 +53,10 @@ const RegisterPage: React.FC = () => {
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
+    if (user) {
       navigate('/dashboard', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [user, navigate]);
 
   // Clear auth error when component mounts
   useEffect(() => {
@@ -209,7 +209,7 @@ const RegisterPage: React.FC = () => {
                 fullWidth
                 variant="contained"
                 size="large"
-                disabled={loading || isLoading}
+                disabled={loading || authLoading}
                 sx={{
                   height: 48,
                   fontSize: '1.1rem',
@@ -217,7 +217,7 @@ const RegisterPage: React.FC = () => {
                   marginBottom: 2,
                 }}
               >
-                {loading || isLoading ? 'Creating Account...' : 'Create Account'}
+                {loading || authLoading ? 'Creating Account...' : 'Create Account'}
               </Button>
 
               <Divider sx={{ marginBottom: 3 }}>

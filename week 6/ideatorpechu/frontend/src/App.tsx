@@ -17,13 +17,15 @@ import MessagesPage from './pages/MessagesPage';
 import PeoplePage from './pages/PeoplePage';
 import Layout from './components/Layout';
 import LoadingSpinner from './components/LoadingSpinner';
+import RealTimeNotifications from './components/RealTimeNotifications';
+import LiveFeed from './components/LiveFeed';
 import './App.css';
 
 // Protected Route Component
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
   
-  if (!isAuthenticated) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
   
@@ -85,24 +87,32 @@ const NotificationsPageWrapper: React.FC = () => {
 
 // Component to handle authentication loading state
 const AppContent: React.FC = () => {
-  const { isLoading, isAuthenticated } = useAuth();
+  const { loading, user } = useAuth();
 
-  if (isLoading) {
+  if (loading) {
     return <LoadingSpinner message="Checking authentication..." />;
   }
 
   return (
     <div className="App">
+      {/* Real-time components */}
+      {user && (
+        <>
+          <RealTimeNotifications />
+          <LiveFeed posts={[]} onPostUpdate={() => {}} />
+        </>
+      )}
+      
       <Routes>
         {/* Public Routes */}
         <Route path="/login" element={
-          isAuthenticated ? <Navigate to="/feed" replace /> : <LoginPage key="login" />
+          user ? <Navigate to="/feed" replace /> : <LoginPage key="login" />
         } />
         <Route path="/register" element={
-          isAuthenticated ? <Navigate to="/feed" replace /> : <RegisterPage key="register" />
+          user ? <Navigate to="/feed" replace /> : <RegisterPage key="register" />
         } />
         <Route path="/forgot-password" element={
-          isAuthenticated ? <Navigate to="/feed" replace /> : <ForgotPasswordPage key="forgot-password" />
+          user ? <Navigate to="/feed" replace /> : <ForgotPasswordPage key="forgot-password" />
         } />
         
         {/* Protected Routes with Layout */}

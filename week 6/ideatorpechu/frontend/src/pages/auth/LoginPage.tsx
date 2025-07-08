@@ -26,7 +26,7 @@ type LoginFormData = yup.InferType<typeof schema>;
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, error: authError, isLoading, isAuthenticated, clearError } = useAuth();
+  const { login, error: authError, loading: authLoading, user, clearError } = useAuth();
   const [loading, setLoading] = useState<boolean>(false);
 
   const {
@@ -39,10 +39,10 @@ const LoginPage: React.FC = () => {
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (isAuthenticated) {
+    if (user) {
       navigate('/dashboard', { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [user, navigate]);
 
   // Clear auth error when user starts typing
   const handleInputChange = () => {
@@ -81,8 +81,8 @@ const LoginPage: React.FC = () => {
 
   // Debug logging before render
   console.log('LoginPage render - authError:', authError);
-  console.log('LoginPage render - isLoading:', isLoading);
-  console.log('LoginPage render - isAuthenticated:', isAuthenticated);
+  console.log('LoginPage render - authLoading:', authLoading);
+  console.log('LoginPage render - user:', user);
 
   return (
     <Box
@@ -180,7 +180,7 @@ const LoginPage: React.FC = () => {
                 fullWidth
                 variant="contained"
                 size="large"
-                disabled={loading || isLoading}
+                disabled={loading || authLoading}
                 sx={{
                   height: 48,
                   fontSize: '1.1rem',
@@ -188,7 +188,7 @@ const LoginPage: React.FC = () => {
                   marginBottom: 2,
                 }}
               >
-                {loading || isLoading ? 'Signing In...' : 'Sign In'}
+                {loading || authLoading ? 'Signing In...' : 'Sign In'}
               </Button>
 
               <Box sx={{ textAlign: 'center', marginBottom: 3 }}>

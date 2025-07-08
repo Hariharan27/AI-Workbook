@@ -13,21 +13,21 @@ import { useAuth } from '../../contexts/AuthContext';
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, isAuthenticated, logout, isLoading } = useAuth();
+  const { user, logout, loading } = useAuth();
 
   // Redirect to login if not authenticated
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (!user && !loading) {
       navigate('/login', { replace: true });
     }
-  }, [isAuthenticated, isLoading, navigate]);
+  }, [user, loading, navigate]);
 
   const handleLogout = async () => {
     await logout();
     navigate('/login', { replace: true });
   };
 
-  if (isLoading) {
+  if (loading) {
     return (
       <Box
         sx={{
@@ -45,7 +45,7 @@ const DashboardPage: React.FC = () => {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!user) {
     return null; // Will redirect to login
   }
 

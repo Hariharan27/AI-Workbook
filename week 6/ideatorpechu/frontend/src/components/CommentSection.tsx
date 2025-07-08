@@ -158,15 +158,13 @@ const CommentSection: React.FC<CommentSectionProps> = ({
       // Use the new toggle API
       const result = await likesAPI.toggleCommentLike(commentId);
 
-      // Update the comment in the local state based on the response
+      // Update the comment in the local state based on the response with actual like count
       setComments(prev => prev.map(c => 
         c._id === commentId 
           ? { 
               ...c, 
               isLiked: result.isLiked, 
-              likes: result.isLiked 
-                ? [...c.likes, currentUserId || '']
-                : c.likes.filter(id => id !== currentUserId)
+              likesCount: result.likesCount // Use actual count from backend
             }
           : c
       ));
@@ -290,7 +288,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
               {comment.isLiked ? <Favorite fontSize="small" /> : <FavoriteBorder fontSize="small" />}
             </IconButton>
             <Typography variant="caption" color="text.secondary">
-              {comment.likes.length}
+              {comment.likesCount || comment.likes.length}
             </Typography>
             
             <Button

@@ -119,51 +119,33 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
   };
 
   const handleLike = async (postId: string) => {
-    try {
-      const post = posts.find(p => p._id === postId);
-      if (!post) return;
+    const post = posts.find(p => p._id === postId);
+    if (!post) return;
 
-      // Use the new toggle API
-      const result = await likesAPI.togglePostLike(postId);
+    // Use the new toggle API
+    const result = await likesAPI.togglePostLike(postId);
 
-      // Update local state based on the response
-      setPosts(prev => prev.map(p => 
-        p._id === postId 
-          ? { 
-              ...p, 
-              isLiked: result.isLiked, 
-              stats: {
-                ...p.stats,
-                likesCount: result.isLiked ? p.stats.likesCount + 1 : p.stats.likesCount - 1
-              }
+    // Update local state based on the response with actual like count from backend
+    setPosts(prev => prev.map(p => 
+      p._id === postId 
+        ? { 
+            ...p, 
+            isLiked: result.isLiked, 
+            stats: {
+              ...p.stats,
+              likesCount: result.likesCount // Use actual count from backend
             }
-          : p
-      ));
+          }
+        : p
+    ));
 
-      setSnackbar({
-        open: true,
-        message: result.message,
-        severity: 'success'
-      });
-    } catch (err: any) {
-      console.error('Error toggling post like:', err);
-      
-      // Handle specific error cases
-      if (err.response?.status === 409) {
-        // Already liked error - this shouldn't happen with toggle, but handle gracefully
-        setSnackbar({
-          open: true,
-          message: 'Like status updated',
-          severity: 'info'
-        });
-      } else {
-        setSnackbar({
-          open: true,
-          message: err.response?.data?.message || 'Failed to update like',
-          severity: 'error'
-        });
-      }
-    }
+    setSnackbar({
+      open: true,
+      message: result.message,
+      severity: 'success'
+    });
+
+    return result;
   };
 
   const handleComment = (postId: string) => {

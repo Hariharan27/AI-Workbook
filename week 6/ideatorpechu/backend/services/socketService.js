@@ -310,17 +310,22 @@ class SocketService {
       const { postId, action } = data;
       const userId = socket.user._id.toString();
       
-      // Emit to post room
+      // Recalculate actual like count to ensure accuracy
+      const Post = require('../models/Post');
+      const actualLikeCount = await Post.recalculateLikeCount(postId);
+      
+      // Emit to post room with accurate count
       socket.to(`post:${postId}`).emit('post:like:update', {
         postId: postId,
         userId: userId,
         username: socket.user.username,
         action: action,
+        newLikeCount: actualLikeCount,
         timestamp: new Date()
       });
 
       // Send notification to post author
-      const post = await require('../models/Post').findById(postId);
+      const post = await Post.findById(postId);
       if (post && post.author.toString() !== userId) {
         await this.sendNotification(post.author, {
           type: 'post_like',

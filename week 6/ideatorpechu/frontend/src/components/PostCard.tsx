@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -62,9 +62,15 @@ const PostCard: React.FC<PostCardProps> = ({
   const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [isLiked, setIsLiked] = useState(post.isLiked);
+  
+  // Sync with parent state changes
+  useEffect(() => {
+    setIsLiked(post.isLiked);
+  }, [post.isLiked]);
   const [likesModalOpen, setLikesModalOpen] = useState(false);
   const [likesLoading, setLikesLoading] = useState(false);
   const [likesUsers, setLikesUsers] = useState<User[]>([]);
+  const [likeLoading, setLikeLoading] = useState(false);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -74,9 +80,20 @@ const PostCard: React.FC<PostCardProps> = ({
     setAnchorEl(null);
   };
 
-  const handleLike = () => {
-    setIsLiked(!isLiked);
-    onLike(post._id);
+  const handleLike = async () => {
+    if (likeLoading) return; // Prevent multiple clicks
+    
+    setLikeLoading(true);
+    try {
+      await onLike(post._id);
+      // The parent component will update the like state
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      // Revert the local state if the API call fails
+      setIsLiked(post.isLiked);
+    } finally {
+      setLikeLoading(false);
+    }
   };
 
   const handleComment = () => {
@@ -283,11 +300,13 @@ const PostCard: React.FC<PostCardProps> = ({
         <Tooltip title={isLiked ? 'Unlike' : 'Like'}>
           <IconButton
             onClick={handleLike}
+            disabled={likeLoading}
             color={isLiked ? 'error' : 'default'}
             sx={{ 
               '&:hover': { 
                 backgroundColor: isLiked ? 'error.light' : 'action.hover' 
-              } 
+              },
+              opacity: likeLoading ? 0.6 : 1
             }}
           >
             {isLiked ? <Favorite /> : <FavoriteBorder />}
