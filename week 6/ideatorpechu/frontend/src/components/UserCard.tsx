@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   Card,
@@ -9,7 +9,12 @@ import {
   Chip,
   IconButton,
   Skeleton,
-  Tooltip
+  Tooltip,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress
 } from '@mui/material';
 import {
   Person,
@@ -74,6 +79,7 @@ interface UserCardProps {
   showActions?: boolean;
   isLoading?: boolean;
   currentUserId?: string;
+  showUnfollowConfirmation?: boolean;
 }
 
 const UserCard: React.FC<UserCardProps> = ({
@@ -86,21 +92,54 @@ const UserCard: React.FC<UserCardProps> = ({
   onRemove,
   showActions = true,
   isLoading = false,
-  currentUserId
+  currentUserId,
+  showUnfollowConfirmation = true
 }) => {
   const navigate = useNavigate();
   const isOwnProfile = currentUserId === user._id;
+  const [followLoading, setFollowLoading] = useState(false);
+  const [unfollowDialogOpen, setUnfollowDialogOpen] = useState(false);
 
   const handleCardClick = () => {
     navigate(`/profile/${user._id}`);
   };
 
-  const handleFollowClick = (e: React.MouseEvent) => {
+  const handleFollowClick = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    if (followLoading) return;
+    
     if (user.isFollowing) {
-      onUnfollow?.(user._id);
+      if (showUnfollowConfirmation) {
+        setUnfollowDialogOpen(true);
+      } else {
+        await handleUnfollow();
+      }
     } else {
-      onFollow?.(user._id);
+      await handleFollow();
+    }
+  };
+
+  const handleFollow = async () => {
+    setFollowLoading(true);
+    try {
+      await onFollow?.(user._id);
+    } catch (error) {
+      console.error('Follow error:', error);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleUnfollow = async () => {
+    setFollowLoading(true);
+    try {
+      await onUnfollow?.(user._id);
+      setUnfollowDialogOpen(false);
+    } catch (error) {
+      console.error('Unfollow error:', error);
+    } finally {
+      setFollowLoading(false);
     }
   };
 
@@ -169,8 +208,10 @@ const UserCard: React.FC<UserCardProps> = ({
               size="small"
               variant={user.isFollowing ? "outlined" : "contained"}
               onClick={handleFollowClick}
+              disabled={followLoading}
+              startIcon={followLoading ? <CircularProgress size={16} /> : undefined}
             >
-              {user.isFollowing ? 'Following' : 'Follow'}
+              {followLoading ? 'Loading...' : (user.isFollowing ? 'Following' : 'Follow')}
             </Button>
           )}
         </Box>
@@ -273,8 +314,10 @@ const UserCard: React.FC<UserCardProps> = ({
                 size="small"
                 variant={user.isFollowing ? "outlined" : "contained"}
                 onClick={handleFollowClick}
+                disabled={followLoading}
+                startIcon={followLoading ? <CircularProgress size={16} /> : undefined}
               >
-                {user.isFollowing ? 'Following' : 'Follow'}
+                {followLoading ? 'Loading...' : (user.isFollowing ? 'Following' : 'Follow')}
               </Button>
               
               <Tooltip title={user.isBlocked ? "Unblock" : "Block"}>
@@ -338,8 +381,10 @@ const UserCard: React.FC<UserCardProps> = ({
                 size="small"
                 variant={user.isFollowing ? "outlined" : "contained"}
                 onClick={handleFollowClick}
+                disabled={followLoading}
+                startIcon={followLoading ? <CircularProgress size={16} /> : undefined}
               >
-                {user.isFollowing ? 'Following' : 'Follow'}
+                {followLoading ? 'Loading...' : (user.isFollowing ? 'Following' : 'Follow')}
               </Button>
               
               {onRemove && (
@@ -356,15 +401,52 @@ const UserCard: React.FC<UserCardProps> = ({
     </Card>
   );
 
-  switch (variant) {
-    case 'compact':
-      return renderCompact();
-    case 'suggestion':
-      return renderSuggestion();
-    case 'detailed':
-    default:
-      return renderDetailed();
-  }
+  return (
+    <>
+      {(() => {
+        switch (variant) {
+          case 'compact':
+            return renderCompact();
+          case 'suggestion':
+            return renderSuggestion();
+          case 'detailed':
+          default:
+            return renderDetailed();
+        }
+      })()}
+
+      {/* Unfollow Confirmation Dialog */}
+      <Dialog
+        open={unfollowDialogOpen}
+        onClose={() => setUnfollowDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Unfollow User</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to unfollow <strong>{user.firstName} {user.lastName}</strong>?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            You won't see their posts in your feed anymore.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUnfollowDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleUnfollow}
+            variant="contained" 
+            color="error"
+            disabled={followLoading}
+          >
+            {followLoading ? 'Unfollowing...' : 'Unfollow'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
+  );
 };
 
 export default UserCard; 

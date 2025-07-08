@@ -26,6 +26,7 @@ const likeSchema = new mongoose.Schema({
 });
 
 // Compound indexes for performance and uniqueness
+// Proper indexes that allow multiple likes per user
 likeSchema.index({ user: 1, type: 1, post: 1 }, { unique: true, sparse: true });
 likeSchema.index({ user: 1, type: 1, comment: 1 }, { unique: true, sparse: true });
 likeSchema.index({ post: 1, createdAt: -1 });
@@ -47,12 +48,14 @@ likeSchema.statics.toggleLike = async function(userId, targetId, type) {
   try {
     console.log(`[LIKE] Toggle like - userId: ${userId}, targetId: ${targetId}, type: ${type}`);
     
-    // Build query
+    // Build query with explicit type check
     const query = { user: userId, type };
     if (type === 'post') {
       query.post = targetId;
+      query.comment = { $exists: false }; // Ensure no comment field
     } else if (type === 'comment') {
       query.comment = targetId;
+      query.post = { $exists: false }; // Ensure no post field
     }
     
     console.log(`[LIKE] Query:`, query);
@@ -73,10 +76,12 @@ likeSchema.statics.toggleLike = async function(userId, targetId, type) {
       const likeData = { user: userId, type };
       if (type === 'post') {
         likeData.post = targetId;
-        // Don't include comment field for post likes
+        // Explicitly exclude comment field
+        likeData.comment = undefined;
       } else if (type === 'comment') {
         likeData.comment = targetId;
-        // Don't include post field for comment likes
+        // Explicitly exclude post field
+        likeData.post = undefined;
       }
       
       console.log(`[LIKE] Like data:`, likeData);
@@ -93,14 +98,15 @@ likeSchema.statics.toggleLike = async function(userId, targetId, type) {
       const query = { user: userId, type };
       if (type === 'post') {
         query.post = targetId;
+        query.comment = { $exists: false };
       } else if (type === 'comment') {
         query.comment = targetId;
+        query.post = { $exists: false };
       }
       
       const existingLike = await this.findOne(query);
       if (existingLike) {
         await this.findByIdAndDelete(existingLike._id);
-        
         return { isLiked: false, like: null };
       }
     }

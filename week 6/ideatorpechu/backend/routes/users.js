@@ -354,16 +354,80 @@ router.get('/:userId/followers', authenticate, async (req, res) => {
       following: userId,
       status: 'accepted'
     })
-    .populate('follower', 'username firstName lastName avatar isVerified')
+    .populate('follower', 'username firstName lastName avatar bio location isVerified isPrivate createdAt lastSeen')
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(parseInt(limit))
     .lean();
 
-    const followers = relationships.map(rel => ({
-      ...rel.follower,
-      followedAt: rel.createdAt
-    }));
+    // Get user IDs for batch stats calculation
+    const userIds = relationships.map(rel => rel.follower._id);
+
+    // Calculate stats in batch using aggregation
+    const statsAggregation = await Post.aggregate([
+      {
+        $match: {
+          author: { $in: userIds },
+          isPublic: true
+        }
+      },
+      {
+        $group: {
+          _id: '$author',
+          postsCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const followersAggregation = await Relationship.aggregate([
+      {
+        $match: {
+          following: { $in: userIds },
+          status: 'accepted'
+        }
+      },
+      {
+        $group: {
+          _id: '$following',
+          followersCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const followingAggregation = await Relationship.aggregate([
+      {
+        $match: {
+          follower: { $in: userIds },
+          status: 'accepted'
+        }
+      },
+      {
+        $group: {
+          _id: '$follower',
+          followingCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Create lookup maps for quick access
+    const postsMap = new Map(statsAggregation.map(item => [item._id.toString(), item.postsCount]));
+    const followersMap = new Map(followersAggregation.map(item => [item._id.toString(), item.followersCount]));
+    const followingMap = new Map(followingAggregation.map(item => [item._id.toString(), item.followingCount]));
+
+    // Add stats to users
+    const followersWithStats = relationships.map(rel => {
+      const user = rel.follower;
+      return {
+        ...user,
+        followedAt: rel.createdAt,
+        stats: {
+          postsCount: postsMap.get(user._id.toString()) || 0,
+          followersCount: followersMap.get(user._id.toString()) || 0,
+          followingCount: followingMap.get(user._id.toString()) || 0,
+          profileViews: 0 // TODO: Implement profile views tracking
+        }
+      };
+    });
 
     const total = await Relationship.countDocuments({
       following: userId,
@@ -374,7 +438,7 @@ router.get('/:userId/followers', authenticate, async (req, res) => {
     res.json({
       success: true,
       data: {
-        users: followers,
+        users: followersWithStats,
         total,
         hasMore
       },
@@ -438,16 +502,80 @@ router.get('/:userId/following', authenticate, async (req, res) => {
       follower: userId,
       status: 'accepted'
     })
-    .populate('following', 'username firstName lastName avatar isVerified')
+    .populate('following', 'username firstName lastName avatar bio location isVerified isPrivate createdAt lastSeen')
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(parseInt(limit))
     .lean();
 
-    const following = relationships.map(rel => ({
-      ...rel.following,
-      followedAt: rel.createdAt
-    }));
+    // Get user IDs for batch stats calculation
+    const userIds = relationships.map(rel => rel.following._id);
+
+    // Calculate stats in batch using aggregation
+    const statsAggregation = await Post.aggregate([
+      {
+        $match: {
+          author: { $in: userIds },
+          isPublic: true
+        }
+      },
+      {
+        $group: {
+          _id: '$author',
+          postsCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const followersAggregation = await Relationship.aggregate([
+      {
+        $match: {
+          following: { $in: userIds },
+          status: 'accepted'
+        }
+      },
+      {
+        $group: {
+          _id: '$following',
+          followersCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const followingAggregation = await Relationship.aggregate([
+      {
+        $match: {
+          follower: { $in: userIds },
+          status: 'accepted'
+        }
+      },
+      {
+        $group: {
+          _id: '$follower',
+          followingCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Create lookup maps for quick access
+    const postsMap = new Map(statsAggregation.map(item => [item._id.toString(), item.postsCount]));
+    const followersMap = new Map(followersAggregation.map(item => [item._id.toString(), item.followersCount]));
+    const followingMap = new Map(followingAggregation.map(item => [item._id.toString(), item.followingCount]));
+
+    // Add stats to users
+    const followingWithStats = relationships.map(rel => {
+      const user = rel.following;
+      return {
+        ...user,
+        followedAt: rel.createdAt,
+        stats: {
+          postsCount: postsMap.get(user._id.toString()) || 0,
+          followersCount: followersMap.get(user._id.toString()) || 0,
+          followingCount: followingMap.get(user._id.toString()) || 0,
+          profileViews: 0 // TODO: Implement profile views tracking
+        }
+      };
+    });
 
     const total = await Relationship.countDocuments({
       follower: userId,
@@ -458,7 +586,7 @@ router.get('/:userId/following', authenticate, async (req, res) => {
     res.json({
       success: true,
       data: {
-        users: following,
+        users: followingWithStats,
         total,
         hasMore
       },

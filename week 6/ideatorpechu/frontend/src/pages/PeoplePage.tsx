@@ -21,7 +21,7 @@ import {
   Group
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
-import { usersAPI, notificationsAPI, User } from '../services/api';
+import { usersAPI, notificationsAPI, searchAPI, User } from '../services/api';
 import UserCard from '../components/UserCard';
 
 const PeoplePage: React.FC = () => {
@@ -51,10 +51,10 @@ const PeoplePage: React.FC = () => {
         setError(null);
         const response = await notificationsAPI.getSuggestedUsers(20);
         
-        // Filter out any users that might already be in the following list
+        // The backend already filters out followed users, but ensure isFollowing is set correctly
         const suggestedUsersWithFlag = (response.users || []).map(user => ({
           ...user,
-          isFollowing: false
+          isFollowing: user.isFollowing || false
         }));
         
         setSuggestedUsers(suggestedUsersWithFlag);
@@ -107,14 +107,11 @@ const PeoplePage: React.FC = () => {
       setSearchLoading(true);
       setError(null);
       
-      // For now, we'll use a simple approach since we don't have a dedicated search endpoint
-      const response = await notificationsAPI.getSuggestedUsers(50);
-      const filteredUsers = response.users.filter(user => 
-        user.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.bio?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      // Use the proper search API
+      const response = await searchAPI.searchUsers(searchQuery, 1, 50);
+      
+      // Filter out users that are already being followed
+      const filteredUsers = response.users.filter(user => !user.isFollowing);
       setSearchResults(filteredUsers);
     } catch (err: any) {
       setError(err.message || 'Failed to search users');
@@ -251,7 +248,7 @@ const PeoplePage: React.FC = () => {
               onFollow={handleFollowUser}
               onUnfollow={handleUnfollowUser}
               currentUserId={currentUser?._id}
-              showActions={false}
+              showActions={true}
             />
           ))}
         </Box>

@@ -29,7 +29,8 @@ import {
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
-import { Post, likesAPI, User } from '../services/api';
+import { Post, likesAPI, sharesAPI, User } from '../services/api';
+import { getImageUrl } from '../utils/imageUtils';
 import Dialog from '@mui/material/Dialog';
 import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
@@ -71,6 +72,10 @@ const PostCard: React.FC<PostCardProps> = ({
   const [likesLoading, setLikesLoading] = useState(false);
   const [likesUsers, setLikesUsers] = useState<User[]>([]);
   const [likeLoading, setLikeLoading] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [sharesModalOpen, setSharesModalOpen] = useState(false);
+  const [sharesLoading, setSharesLoading] = useState(false);
+  const [sharesUsers, setSharesUsers] = useState<User[]>([]);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -81,11 +86,14 @@ const PostCard: React.FC<PostCardProps> = ({
   };
 
   const handleLike = async () => {
+    console.log('PostCard handleLike clicked for post:', post._id);
     if (likeLoading) return; // Prevent multiple clicks
     
     setLikeLoading(true);
     try {
+      console.log('Calling onLike with postId:', post._id);
       await onLike(post._id);
+      console.log('onLike completed successfully');
       // The parent component will update the like state
     } catch (error) {
       console.error('Error toggling like:', error);
@@ -100,8 +108,17 @@ const PostCard: React.FC<PostCardProps> = ({
     onComment(post._id);
   };
 
-  const handleShare = () => {
-    onShare(post._id);
+  const handleShare = async () => {
+    if (shareLoading) return;
+    
+    setShareLoading(true);
+    try {
+      await onShare(post._id);
+    } catch (error) {
+      console.error('Error sharing post:', error);
+    } finally {
+      setShareLoading(false);
+    }
   };
 
   const handleEdit = () => {
@@ -151,6 +168,24 @@ const PostCard: React.FC<PostCardProps> = ({
     setLikesUsers([]);
   };
 
+  const handleOpenSharesModal = async () => {
+    setSharesModalOpen(true);
+    setSharesLoading(true);
+    try {
+      const res = await sharesAPI.getPostShares(post._id);
+      setSharesUsers(res.shares.map((share: any) => share.author));
+    } catch (err) {
+      setSharesUsers([]);
+    } finally {
+      setSharesLoading(false);
+    }
+  };
+
+  const handleCloseSharesModal = () => {
+    setSharesModalOpen(false);
+    setSharesUsers([]);
+  };
+
   return (
     <Card sx={{ mb: 2, borderRadius: 2, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
       {/* Post Header */}
@@ -172,9 +207,14 @@ const PostCard: React.FC<PostCardProps> = ({
               <Typography variant="subtitle1" fontWeight="bold">
                 {post.author.firstName} {post.author.lastName}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
-                @{post.author.username}
-              </Typography>
+                          <Typography variant="body2" color="text.secondary">
+              @{post.author.username}
+              {post.isShared && (
+                <span style={{ color: '#1976d2', marginLeft: '4px' }}>
+                  • shared
+                </span>
+              )}
+            </Typography>
             </Box>
           </Box>
           
@@ -241,21 +281,25 @@ const PostCard: React.FC<PostCardProps> = ({
                 gap: 1
               }}
             >
-              {post.media.map((mediaUrl, index) => (
-                <Box
-                  key={index}
-                  component="img"
-                  src={mediaUrl}
-                  alt={`Post media ${index + 1}`}
-                  sx={{
-                    width: '100%',
-                    height: post.media!.length === 1 ? 300 : 150,
-                    objectFit: 'cover',
-                    borderRadius: 1,
-                    cursor: 'pointer'
-                  }}
-                />
-              ))}
+              {post.media.map((media, index) => {
+                const url = getImageUrl(media.url);
+                console.log('Rendering image:', url);
+                return (
+                  <Box
+                    key={index}
+                    component="img"
+                    src={url}
+                    alt={`Post media ${index + 1}`}
+                    sx={{
+                      width: '100%',
+                      height: post.media!.length === 1 ? 300 : 150,
+                      objectFit: 'cover',
+                      borderRadius: 1,
+                      cursor: 'pointer'
+                    }}
+                  />
+                );
+              })}
             </Box>
           </Box>
         )}
@@ -285,7 +329,10 @@ const PostCard: React.FC<PostCardProps> = ({
             <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={handleOpenLikesModal}>
               {post.stats.likesCount} likes
             </span>
-            {' • '}{post.stats.commentsCount} comments • {post.stats.sharesCount} shares
+            {' • '}{post.stats.commentsCount} comments • 
+            <span style={{ cursor: 'pointer', textDecoration: 'underline' }} onClick={handleOpenSharesModal}>
+              {post.stats.sharesCount} shares
+            </span>
           </Typography>
           {!post.isPublic && (
             <Chip label="Private" size="small" color="warning" />
@@ -320,8 +367,14 @@ const PostCard: React.FC<PostCardProps> = ({
         </Tooltip>
 
         <Tooltip title="Share">
-          <IconButton onClick={handleShare}>
-            <Share />
+          <IconButton 
+            onClick={handleShare}
+            disabled={shareLoading}
+            sx={{ 
+              opacity: shareLoading ? 0.6 : 1
+            }}
+          >
+            {shareLoading ? <CircularProgress size={20} /> : <Share />}
           </IconButton>
         </Tooltip>
       </CardActions>
@@ -377,6 +430,36 @@ const PostCard: React.FC<PostCardProps> = ({
           ) : (
             <List>
               {likesUsers.map(user => (
+                <ListItem key={user._id}>
+                  <ListItemAvatar>
+                    <Avatar src={user.avatar}>
+                      {user.firstName?.[0]}{user.lastName?.[0]}
+                    </Avatar>
+                  </ListItemAvatar>
+                  <ListItemText
+                    primary={`${user.firstName} ${user.lastName}`}
+                    secondary={`@${user.username}`}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Shares Modal */}
+      <Dialog open={sharesModalOpen} onClose={handleCloseSharesModal} maxWidth="xs" fullWidth>
+        <DialogTitle>Shared by</DialogTitle>
+        <DialogContent>
+          {sharesLoading ? (
+            <Box display="flex" justifyContent="center" p={2}><CircularProgress /></Box>
+          ) : sharesUsers.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" align="center" py={2}>
+              No shares yet
+            </Typography>
+          ) : (
+            <List>
+              {sharesUsers.map(user => (
                 <ListItem key={user._id}>
                   <ListItemAvatar>
                     <Avatar src={user.avatar}>

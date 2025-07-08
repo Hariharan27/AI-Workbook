@@ -197,14 +197,14 @@ postSchema.statics.getFeedPosts = async function(userId, followingIds, options =
     },
     {
       $addFields: {
-        // Calculate engagement score
+        // Calculate engagement score with optimized weights
         engagementScore: {
           $add: [
-            { $multiply: ['$stats.likesCount', 2] },
-            { $multiply: ['$stats.commentsCount', 3] },
-            { $multiply: ['$stats.sharesCount', 4] },
-            { $multiply: ['$stats.viewsCount', 0.1] },
-            // Time decay factor (newer posts get higher score)
+            { $multiply: ['$stats.likesCount', 1.5] },
+            { $multiply: ['$stats.commentsCount', 2.5] },
+            { $multiply: ['$stats.sharesCount', 3.5] },
+            { $multiply: ['$stats.viewsCount', 0.05] },
+            // Improved time decay factor (less aggressive)
             {
               $multiply: [
                 {
@@ -213,12 +213,28 @@ postSchema.statics.getFeedPosts = async function(userId, followingIds, options =
                     1000 * 60 * 60 * 24 // Convert to days
                   ]
                 },
-                -0.5 // Penalty for older posts
+                -0.3 // Reduced penalty for older posts
               ]
             }
           ]
         }
       }
+    },
+    {
+      $sort: { engagementScore: -1, createdAt: -1 }
+    },
+    // Add content diversity by limiting posts from same author
+    {
+      $group: {
+        _id: '$author._id',
+        posts: { $push: '$$ROOT' }
+      }
+    },
+    {
+      $unwind: '$posts'
+    },
+    {
+      $replaceRoot: { newRoot: '$posts' }
     },
     {
       $sort: { engagementScore: -1, createdAt: -1 }

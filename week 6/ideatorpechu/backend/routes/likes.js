@@ -45,6 +45,8 @@ router.post('/:targetId/toggle', authenticate, handleValidationErrors, async (re
     const { type } = req.body;
     const currentUserId = req.user._id;
     
+    console.log(`[LIKE ROUTE] Toggle like request - targetId: ${targetId}, type: ${type}, userId: ${currentUserId}`);
+    
     // Validate target exists
     let target;
     if (type === 'post') {
@@ -52,6 +54,8 @@ router.post('/:targetId/toggle', authenticate, handleValidationErrors, async (re
     } else if (type === 'comment') {
       target = await Comment.findById(targetId);
     }
+    
+    console.log(`[LIKE ROUTE] Target found:`, target ? target._id : 'not found');
     
     if (!target) {
       return res.status(404).json({
@@ -64,12 +68,16 @@ router.post('/:targetId/toggle', authenticate, handleValidationErrors, async (re
     }
     
     // Use the new toggle method
+    console.log(`[LIKE ROUTE] Calling Like.toggleLike...`);
     const result = await Like.toggleLike(currentUserId, targetId, type);
+    console.log(`[LIKE ROUTE] Toggle result:`, result);
     
     // Recalculate like count to ensure accuracy
     let actualLikeCount;
     if (type === 'post') {
+      console.log(`[LIKE ROUTE] Recalculating post like count...`);
       actualLikeCount = await Post.recalculateLikeCount(targetId);
+      console.log(`[LIKE ROUTE] Actual like count:`, actualLikeCount);
     } else if (type === 'comment') {
       actualLikeCount = await Like.countDocuments({ comment: targetId, type: 'comment' });
       await Comment.findByIdAndUpdate(targetId, { likesCount: actualLikeCount });
@@ -86,7 +94,8 @@ router.post('/:targetId/toggle', authenticate, handleValidationErrors, async (re
     });
     
   } catch (error) {
-    console.error('Like toggle error:', error && error.stack ? error.stack : error);
+    console.error('[LIKE ROUTE] Like toggle error:', error);
+    console.error('[LIKE ROUTE] Error stack:', error.stack);
     res.status(500).json({
       success: false,
       error: {

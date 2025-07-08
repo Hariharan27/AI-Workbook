@@ -32,7 +32,16 @@ interface PostEditorProps {
   post?: {
     _id: string;
     content: string;
-    media?: string[];
+    media?: Array<{
+      type: 'image' | 'video';
+      url: string;
+      thumbnail?: string;
+      metadata?: {
+        size?: number;
+        duration?: number;
+        dimensions?: { width: number; height: number };
+      };
+    }>;
     hashtags?: string[];
     mentions?: Array<{
       _id: string;

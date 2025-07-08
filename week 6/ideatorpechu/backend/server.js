@@ -179,6 +179,10 @@ app.get('/api/v1/feed', authenticate, async (req, res) => {
   }
 });
 
+// Serve uploads directory as static files
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 // Protected routes
 app.use('/api/v1/messages', authenticate, messageRoutes);
 app.use('/api/v1/notifications', authenticate, notificationRoutes);

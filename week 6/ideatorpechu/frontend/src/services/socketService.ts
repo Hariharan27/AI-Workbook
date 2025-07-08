@@ -46,6 +46,7 @@ class SocketService {
   private postLikeListeners: ((data: any) => void)[] = [];
   private postCommentListeners: ((data: any) => void)[] = [];
   private postShareListeners: ((data: any) => void)[] = [];
+  private feedUpdateListeners: ((data: any) => void)[] = [];
 
   connect(token: string) {
     this.authToken = token;
@@ -115,6 +116,10 @@ class SocketService {
 
       this.socialSocket.on('user:status:change', (data: any) => {
         this.userStatusListeners.forEach(listener => listener(data));
+      });
+
+      this.socialSocket.on('feed:update', (data: any) => {
+        this.feedUpdateListeners.forEach(listener => listener(data));
       });
     }
 
@@ -246,6 +251,10 @@ class SocketService {
     this.postShareListeners.push(callback);
   }
 
+  onFeedUpdate(callback: (data: any) => void) {
+    this.feedUpdateListeners.push(callback);
+  }
+
   // Remove event listeners
   removeMessageListener(callback: (message: SocketMessage) => void) {
     this.messageListeners = this.messageListeners.filter(listener => listener !== callback);
@@ -277,6 +286,10 @@ class SocketService {
 
   removePostShareListener(callback: (data: any) => void) {
     this.postShareListeners = this.postShareListeners.filter(listener => listener !== callback);
+  }
+
+  removeFeedUpdateListener(callback: (data: any) => void) {
+    this.feedUpdateListeners = this.feedUpdateListeners.filter(listener => listener !== callback);
   }
 
   // Disconnect

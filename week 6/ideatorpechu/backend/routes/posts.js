@@ -9,6 +9,8 @@ const Hashtag = require('../models/Hashtag');
 const User = require('../models/User');
 const { authenticate } = require('../middleware/authenticate');
 const mediaService = require('../services/mediaService');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
 
@@ -25,9 +27,20 @@ const postRateLimit = rateLimit({
   }
 });
 
-// Configure multer for file uploads
+// Configure multer for local file uploads
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: multer.diskStorage({
+    destination: function (req, file, cb) {
+      const uploadDir = path.join(__dirname, '../../uploads');
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      cb(null, uploadDir);
+    },
+    filename: function (req, file, cb) {
+      cb(null, Date.now() + '-' + file.originalname);
+    }
+  }),
   limits: {
     fileSize: 100 * 1024 * 1024, // 100MB
     files: 10 // Maximum 10 files per post
@@ -93,13 +106,21 @@ router.post('/',
       // Convert isPublic string to boolean
       const isPublicBoolean = isPublic === 'true' || isPublic === true;
 
-      // Upload media files if provided
+      // Use local file paths for media
       let media = [];
       if (req.files && req.files.length > 0) {
-        const uploadPromises = req.files.map(file => 
-          mediaService.uploadFile(file, { folder: 'ideatorpechu/posts' })
-        );
-        media = await Promise.all(uploadPromises);
+        media = req.files.map(file => {
+          // Map MIME type to enum value
+          let mediaType = 'image';
+          if (file.mimetype.startsWith('video/')) {
+            mediaType = 'video';
+          }
+          
+          return {
+            url: `/uploads/${path.basename(file.path)}`,
+            type: mediaType
+          };
+        });
       }
 
       // Resolve mentions to user IDs
@@ -151,6 +172,25 @@ router.post('/',
 
       // Populate author info
       await post.populate('author', 'username firstName lastName avatar isVerified');
+
+      // Invalidate feed cache for author and followers
+      const cacheService = require('../services/cacheService');
+      try {
+        // Invalidate author's feed cache
+        await cacheService.invalidateUserFeed(post.author);
+        
+        // Invalidate followers' feed cache
+        const followers = await require('../models/Relationship').find({
+          following: post.author,
+          status: 'accepted'
+        }).select('follower');
+        
+        for (const follower of followers) {
+          await cacheService.invalidateUserFeed(follower.follower);
+        }
+      } catch (cacheError) {
+        console.error('Cache invalidation error:', cacheError);
+      }
 
       res.status(201).json({
         success: true,
@@ -286,9 +326,31 @@ router.get('/trending', authenticate, async (req, res) => {
       isLiked: likedPostIds.includes(post._id.toString())
     }));
 
+    // Calculate total count for pagination
+    const total = await Post.countDocuments({
+      isPublic: true,
+      $or: [
+        { 'stats.likesCount': { $gt: 0 } },
+        { 'stats.commentsCount': { $gt: 0 } },
+        { 'stats.sharesCount': { $gt: 0 } }
+      ]
+    });
+    
+    const hasMore = (parseInt(page) * parseInt(limit)) < total;
+    
     res.json({
       success: true,
-      data: { posts: postsWithLikes },
+      data: { 
+        posts: postsWithLikes,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          hasMore,
+          hasNext: hasMore,
+          hasPrev: parseInt(page) > 1
+        }
+      },
       message: 'Trending posts retrieved successfully'
     });
 
@@ -399,9 +461,28 @@ router.get('/following', authenticate, async (req, res) => {
       isLiked: likedPostIds.includes(post._id.toString())
     }));
 
+    // Calculate total count for pagination
+    const total = await Post.countDocuments({
+      author: { $in: followingIds },
+      author: { $ne: userId },
+      isPublic: true
+    });
+    
+    const hasMore = (parseInt(page) * parseInt(limit)) < total;
+    
     res.json({
       success: true,
-      data: { posts: postsWithLikes },
+      data: { 
+        posts: postsWithLikes,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          hasMore,
+          hasNext: hasMore,
+          hasPrev: parseInt(page) > 1
+        }
+      },
       message: 'Following posts retrieved successfully'
     });
 
@@ -697,6 +778,16 @@ router.get('/feed', authenticate, async (req, res) => {
 
     console.log(`[FEED] userId: ${userId}, page: ${page}, limit: ${limit}`);
 
+    // Try to get cached feed first
+    const cacheService = require('../services/cacheService');
+    const cacheKey = `feed:${userId}:${page}:${limit}`;
+    let cachedFeed = await cacheService.get(cacheKey);
+    
+    if (cachedFeed) {
+      console.log(`[FEED] Returning cached feed for user ${userId}`);
+      return res.json(cachedFeed);
+    }
+
     // Get user's following list
     const following = await require('../models/Relationship').find({
       follower: userId,
@@ -742,11 +833,34 @@ router.get('/feed', authenticate, async (req, res) => {
     }));
     console.log(`[FEED] postsWithLikes length: ${postsWithLikes.length}`);
 
-    res.json({
-      success: true,
-      data: { posts: postsWithLikes },
-      message: 'Feed retrieved successfully'
+    // Calculate pagination metadata
+    const total = await Post.countDocuments({
+      author: { $in: [...followingIds, userId] },
+      isPublic: true
     });
+    
+    const hasMore = (parseInt(page) * parseInt(limit)) < total;
+    
+    const response = {
+      success: true,
+      data: { 
+        posts: postsWithLikes,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          hasMore,
+          hasNext: hasMore,
+          hasPrev: parseInt(page) > 1
+        }
+      },
+      message: 'Feed retrieved successfully'
+    };
+
+    // Cache the response for 5 minutes
+    await cacheService.set(cacheKey, response, 300);
+    
+    res.json(response);
 
   } catch (error) {
     console.error('[FEED] Feed retrieval error:', error);

@@ -3,6 +3,7 @@ const { query, validationResult } = require('express-validator');
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Hashtag = require('../models/Hashtag');
+const Relationship = require('../models/Relationship');
 const { authenticate } = require('../middleware/authenticate');
 
 const router = express.Router();
@@ -126,9 +127,10 @@ router.get('/users',
       const currentUserId = req.user._id;
       const skip = (parseInt(page) - 1) * parseInt(limit);
 
-      // Build search query
+      // Build search query - exclude current user
       const searchQuery = {
         isActive: true,
+        _id: { $ne: currentUserId }, // Exclude current user
         $or: [
           { username: { $regex: q, $options: 'i' } },
           { firstName: { $regex: q, $options: 'i' } },
@@ -139,18 +141,44 @@ router.get('/users',
 
       // Get users with search
       const users = await User.find(searchQuery)
-        .select('-password -email')
-        .sort({ 'stats.followersCount': -1, createdAt: -1 })
+        .select('username firstName lastName avatar bio location isVerified isPrivate createdAt lastSeen')
+        .sort({ createdAt: -1 })
         .limit(parseInt(limit))
         .skip(skip)
         .lean();
+
+      // Get current user's following list for comparison
+      const followingRelationships = await Relationship.find({
+        follower: currentUserId,
+        status: 'accepted'
+      }).select('following');
+
+      const followingIds = followingRelationships.map(r => r.following.toString());
+
+      // Calculate stats and follow status for each user
+      const usersWithStats = await Promise.all(users.map(async (user) => {
+        const postsCount = await Post.countDocuments({ author: user._id, isPublic: true });
+        const followersCount = await Relationship.countDocuments({ following: user._id, status: 'accepted' });
+        const followingCount = await Relationship.countDocuments({ follower: user._id, status: 'accepted' });
+        
+        return {
+          ...user,
+          isFollowing: followingIds.includes(user._id.toString()),
+          stats: {
+            postsCount,
+            followersCount,
+            followingCount,
+            profileViews: 0 // TODO: Implement profile views tracking
+          }
+        };
+      }));
 
       const total = await User.countDocuments(searchQuery);
 
       res.json({
         success: true,
         data: {
-          users,
+          users: usersWithStats,
           pagination: {
             page: parseInt(page),
             limit: parseInt(limit),

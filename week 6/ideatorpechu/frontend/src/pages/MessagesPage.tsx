@@ -15,16 +15,26 @@ import {
   useMediaQuery,
   AppBar,
   Toolbar,
-  CircularProgress
+  CircularProgress,
+  Button,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  ListItemButton,
+  Divider
 } from '@mui/material';
 import {
   Send as SendIcon,
   ArrowBack as ArrowBackIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Add as AddIcon,
+  Person as PersonIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import socketService from '../services/socketService';
 import messagesAPI from '../services/messagesAPI';
+import { searchAPI, User } from '../services/api';
 
 const MessagesPage: React.FC = () => {
   const { user } = useAuth();
@@ -37,6 +47,12 @@ const MessagesPage: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(false);
+  
+  // New conversation states
+  const [showNewConversation, setShowNewConversation] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<User[]>([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
 
   // Load conversations from API
   useEffect(() => {
@@ -135,6 +151,61 @@ const MessagesPage: React.FC = () => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  // Search users for new conversation
+  const searchUsers = async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    try {
+      setSearchingUsers(true);
+      const response = await searchAPI.searchUsers(query, 1, 20);
+      // Filter out current user and users already in conversations
+      const filteredUsers = response.users.filter(user => 
+        user._id !== user?._id && 
+        !conversations.some(conv => 
+          conv.type === 'direct' && 
+          conv.participants.some((p: any) => p._id === user._id)
+        )
+      );
+      setSearchResults(filteredUsers);
+    } catch (error) {
+      console.error('Failed to search users:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchingUsers(false);
+    }
+  };
+
+  // Handle user search input change
+  const handleUserSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setUserSearchQuery(query);
+    searchUsers(query);
+  };
+
+  // Start conversation with user
+  const startConversationWithUser = async (selectedUser: User) => {
+    try {
+      const response = await messagesAPI.createDirectConversation(selectedUser._id);
+      const newConversation = response.conversation;
+      
+      // Add to conversations list
+      setConversations(prev => [newConversation, ...prev]);
+      
+      // Select the new conversation
+      setSelectedConversation(newConversation);
+      
+      // Close dialog
+      setShowNewConversation(false);
+      setUserSearchQuery('');
+      setSearchResults([]);
+    } catch (error) {
+      console.error('Failed to start conversation:', error);
     }
   };
 
@@ -289,8 +360,23 @@ const MessagesPage: React.FC = () => {
 
   const ConversationList = () => (
     <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      {/* Search */}
+      {/* Header with New Message button */}
       <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" fontWeight="bold">
+            Messages
+          </Typography>
+          <Button
+            variant="contained"
+            size="small"
+            startIcon={<AddIcon />}
+            onClick={() => setShowNewConversation(true)}
+          >
+            New Message
+          </Button>
+        </Box>
+        
+        {/* Search conversations */}
         <TextField
           fullWidth
           variant="outlined"
@@ -390,45 +476,121 @@ const MessagesPage: React.FC = () => {
   );
 
   return (
-    <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex' }}>
-      {/* Conversation List */}
-      <Box
-        sx={{
-          width: isMobile ? '100%' : 350,
-          borderRight: 1,
-          borderColor: 'divider',
-          display: isMobile && selectedConversation ? 'none' : 'block'
-        }}
-      >
-        <ConversationList />
+    <>
+      <Box sx={{ height: 'calc(100vh - 64px)', display: 'flex' }}>
+        {/* Conversation List */}
+        <Box
+          sx={{
+            width: isMobile ? '100%' : 350,
+            borderRight: 1,
+            borderColor: 'divider',
+            display: isMobile && selectedConversation ? 'none' : 'block'
+          }}
+        >
+          <ConversationList />
+        </Box>
+
+        {/* Chat Interface */}
+        {selectedConversation ? (
+          <Box
+            sx={{
+              flexGrow: 1,
+              display: isMobile && !selectedConversation ? 'none' : 'block'
+            }}
+          >
+            <ChatInterface />
+          </Box>
+        ) : (
+          <Box
+            sx={{
+              flexGrow: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#f5f5f5'
+            }}
+          >
+            <Typography variant="h6" color="text.secondary">
+              Select a conversation to start messaging
+            </Typography>
+          </Box>
+        )}
       </Box>
 
-      {/* Chat Interface */}
-      {selectedConversation ? (
-        <Box
-          sx={{
-            flexGrow: 1,
-            display: isMobile && !selectedConversation ? 'none' : 'block'
-          }}
-        >
-          <ChatInterface />
-        </Box>
-      ) : (
-        <Box
-          sx={{
-            flexGrow: 1,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#f5f5f5'
-          }}
-        >
-          <Typography variant="h6" color="text.secondary">
-            Select a conversation to start messaging
-          </Typography>
-        </Box>
-      )}
-    </Box>
+      {/* New Conversation Dialog */}
+      <Dialog 
+        open={showNewConversation} 
+        onClose={() => setShowNewConversation(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Typography variant="h6">New Message</Typography>
+        </DialogTitle>
+        <DialogContent>
+          <TextField
+            fullWidth
+            variant="outlined"
+            placeholder="Search users..."
+            value={userSearchQuery}
+            onChange={handleUserSearchChange}
+            size="small"
+            sx={{ mb: 2 }}
+            InputProps={{
+              startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+            }}
+          />
+          
+          <Box sx={{ maxHeight: 400, overflow: 'auto' }}>
+            {searchingUsers ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <CircularProgress />
+              </Box>
+            ) : searchResults.length === 0 && userSearchQuery ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                <Typography color="text.secondary">
+                  No users found
+                </Typography>
+              </Box>
+            ) : (
+              <List>
+                {searchResults.map((user) => (
+                  <ListItem key={user._id} disablePadding>
+                    <ListItemButton onClick={() => startConversationWithUser(user)}>
+                      <ListItemAvatar>
+                        <Avatar src={user.avatar}>
+                          {user.username?.charAt(0)}
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText
+                        primary={
+                          <Typography variant="subtitle2">
+                            {user.firstName && user.lastName 
+                              ? `${user.firstName} ${user.lastName}`
+                              : user.username
+                            }
+                          </Typography>
+                        }
+                        secondary={
+                          <Typography variant="body2" color="text.secondary">
+                            @{user.username}
+                          </Typography>
+                        }
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setShowNewConversation(false)}>
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 

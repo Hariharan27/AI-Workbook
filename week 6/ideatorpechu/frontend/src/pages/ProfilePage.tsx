@@ -19,7 +19,12 @@ import {
   Tabs,
   Tab,
   ListItemIcon,
-  ListItemText
+  ListItemText,
+  CircularProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
 import {
   Edit,
@@ -57,6 +62,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
   const [showPostEditor, setShowPostEditor] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
   const [followLoading, setFollowLoading] = useState(false);
+  const [unfollowDialogOpen, setUnfollowDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
     message: '',
@@ -99,38 +105,59 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
   const handleFollow = async () => {
     if (!user || !currentUserId) return;
 
+    if (user.isFollowing) {
+      setUnfollowDialogOpen(true);
+    } else {
+      await handleFollowUser();
+    }
+  };
+
+  const handleFollowUser = async () => {
+    if (!user || !currentUserId) return;
+
     try {
       setFollowLoading(true);
-      if (user.isFollowing) {
-        await usersAPI.unfollowUser(user._id);
-        setUser(prev => prev ? {
-          ...prev,
-          isFollowing: false,
-          stats: {
-            followersCount: (prev.stats?.followersCount || 0) - 1,
-            followingCount: prev.stats?.followingCount || 0,
-            postsCount: prev.stats?.postsCount || 0,
-            profileViews: prev.stats?.profileViews || 0
-          }
-        } : null);
-        setSnackbar({ open: true, message: 'Unfollowed user', severity: 'success' });
-      } else {
-        await usersAPI.followUser(user._id);
-        setUser(prev => prev ? {
-          ...prev,
-          isFollowing: true,
-          stats: {
-            followersCount: (prev.stats?.followersCount || 0) + 1,
-            followingCount: prev.stats?.followingCount || 0,
-            postsCount: prev.stats?.postsCount || 0,
-            profileViews: prev.stats?.profileViews || 0
-          }
-        } : null);
-        setSnackbar({ open: true, message: 'Followed user', severity: 'success' });
-      }
+      await usersAPI.followUser(user._id);
+      setUser(prev => prev ? {
+        ...prev,
+        isFollowing: true,
+        stats: {
+          followersCount: (prev.stats?.followersCount || 0) + 1,
+          followingCount: prev.stats?.followingCount || 0,
+          postsCount: prev.stats?.postsCount || 0,
+          profileViews: prev.stats?.profileViews || 0
+        }
+      } : null);
+      setSnackbar({ open: true, message: 'Followed user', severity: 'success' });
     } catch (err: any) {
-      setSnackbar({ open: true, message: err.message || 'Failed to follow/unfollow user', severity: 'error' });
+      setSnackbar({ open: true, message: err.message || 'Failed to follow user', severity: 'error' });
       console.error('Follow error:', err);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const handleUnfollowUser = async () => {
+    if (!user || !currentUserId) return;
+
+    try {
+      setFollowLoading(true);
+      await usersAPI.unfollowUser(user._id);
+      setUser(prev => prev ? {
+        ...prev,
+        isFollowing: false,
+        stats: {
+          followersCount: (prev.stats?.followersCount || 0) - 1,
+          followingCount: prev.stats?.followingCount || 0,
+          postsCount: prev.stats?.postsCount || 0,
+          profileViews: prev.stats?.profileViews || 0
+        }
+      } : null);
+      setSnackbar({ open: true, message: 'Unfollowed user', severity: 'success' });
+      setUnfollowDialogOpen(false);
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || 'Failed to unfollow user', severity: 'error' });
+      console.error('Unfollow error:', err);
     } finally {
       setFollowLoading(false);
     }
@@ -325,8 +352,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
               <Button
                 variant={user.isFollowing ? "outlined" : "contained"}
                 onClick={handleFollow}
+                disabled={followLoading}
+                startIcon={followLoading ? <CircularProgress size={16} /> : undefined}
               >
-                {user.isFollowing ? 'Following' : 'Follow'}
+                {followLoading ? 'Loading...' : (user.isFollowing ? 'Following' : 'Follow')}
               </Button>
             )}
             
@@ -478,12 +507,43 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
         )}
       </Menu>
 
-             <Snackbar
-         open={snackbar.open}
-         autoHideDuration={6000}
-         onClose={() => setSnackbar({ ...snackbar, open: false })}
-         message={snackbar.message}
-       />
+      {/* Unfollow Confirmation Dialog */}
+      <Dialog
+        open={unfollowDialogOpen}
+        onClose={() => setUnfollowDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Unfollow User</DialogTitle>
+        <DialogContent>
+          <Typography>
+            Are you sure you want to unfollow <strong>{user.firstName} {user.lastName}</strong>?
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            You won't see their posts in your feed anymore.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUnfollowDialogOpen(false)}>
+            Cancel
+          </Button>
+          <Button 
+            onClick={handleUnfollowUser}
+            variant="contained" 
+            color="error"
+            disabled={followLoading}
+          >
+            {followLoading ? 'Unfollowing...' : 'Unfollow'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        message={snackbar.message}
+      />
     </Container>
   );
 };

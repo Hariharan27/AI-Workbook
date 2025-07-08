@@ -20,6 +20,7 @@ import InfiniteScroll from 'react-infinite-scroll-component';
 import PostCard from '../components/PostCard';
 import PostEditor from '../components/PostEditor';
 import CommentSection from '../components/CommentSection';
+import ShareModal from '../components/ShareModal';
 import { postsAPI, likesAPI, sharesAPI } from '../services/api';
 import { Post } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,6 +41,10 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
   const [page, setPage] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+
+  // State for share modal
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [selectedPostForShare, setSelectedPostForShare] = useState<Post | null>(null);
 
   // State for notifications
   const [snackbar, setSnackbar] = useState<{
@@ -105,6 +110,37 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
     fetchPosts(1, ['latest', 'trending', 'following'][activeTab]);
   }, [activeTab]);
 
+  // Listen for real-time feed updates
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const handleFeedUpdate = (data: any) => {
+      console.log('Feed update received:', data);
+      
+      // Update post in the current feed
+      setPosts(prev => prev.map(post => {
+        if (post._id === data.postId) {
+          return {
+            ...post,
+            stats: {
+              ...post.stats,
+              likesCount: data.newLikeCount || post.stats.likesCount
+            }
+          };
+        }
+        return post;
+      }));
+    };
+
+    // Listen for feed updates using the socket service
+    const socketService = require('../services/socketService').default;
+    socketService.onFeedUpdate(handleFeedUpdate);
+
+    return () => {
+      socketService.removeFeedUpdateListener(handleFeedUpdate);
+    };
+  }, [currentUser]);
+
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
     setPage(1);
@@ -159,13 +195,23 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
     setExpandedComments(newExpanded);
   };
 
-  const handleShare = async (postId: string) => {
+  const handleShare = (postId: string) => {
+    const post = posts.find(p => p._id === postId);
+    if (post) {
+      setSelectedPostForShare(post);
+      setShareModalOpen(true);
+    }
+  };
+
+  const handleShareToUser = async (userId: string, message?: string) => {
+    if (!selectedPostForShare) return;
+    
     try {
-      await sharesAPI.sharePost(postId);
+      await sharesAPI.sharePost(selectedPostForShare._id, { message });
       
       // Update local state
       setPosts(prev => prev.map(p => 
-        p._id === postId 
+        p._id === selectedPostForShare._id 
           ? { 
               ...p, 
               stats: {
@@ -189,6 +235,19 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
         severity: 'error'
       });
     }
+  };
+
+  const handleShareToPlatform = (platform: string, url: string) => {
+    setSnackbar({
+      open: true,
+      message: `Shared to ${platform}!`,
+      severity: 'success'
+    });
+  };
+
+  const handleCloseShareModal = () => {
+    setShareModalOpen(false);
+    setSelectedPostForShare(null);
   };
 
   const handleEdit = (postId: string) => {
@@ -275,6 +334,18 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
           />
         </DialogContent>
       </Dialog>
+
+      {/* Share Modal */}
+      {selectedPostForShare && (
+        <ShareModal
+          open={shareModalOpen}
+          onClose={handleCloseShareModal}
+          post={selectedPostForShare}
+          currentUserId={currentUserId}
+          onShareToUser={handleShareToUser}
+          onShareToPlatform={handleShareToPlatform}
+        />
+      )}
 
       {/* Feed Content */}
       <Box>

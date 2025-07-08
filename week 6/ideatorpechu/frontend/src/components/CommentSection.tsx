@@ -152,11 +152,17 @@ const CommentSection: React.FC<CommentSectionProps> = ({
 
   const handleLikeComment = async (commentId: string) => {
     try {
+      console.log('🔍 Comment like attempt:', commentId);
       const comment = comments.find(c => c._id === commentId);
-      if (!comment) return;
+      if (!comment) {
+        console.error('❌ Comment not found:', commentId);
+        return;
+      }
 
+      console.log('📞 Calling toggleCommentLike API...');
       // Use the new toggle API
       const result = await likesAPI.toggleCommentLike(commentId);
+      console.log('✅ API response:', result);
 
       // Update the comment in the local state based on the response with actual like count
       setComments(prev => prev.map(c => 
@@ -168,8 +174,11 @@ const CommentSection: React.FC<CommentSectionProps> = ({
             }
           : c
       ));
+      
+      console.log('✅ Comment like updated successfully');
     } catch (err: any) {
-      console.error('Error toggling comment like:', err);
+      console.error('❌ Error toggling comment like:', err);
+      console.error('❌ Error details:', err.response?.data);
       setError(err.response?.data?.message || 'Failed to update comment like');
     }
   };
@@ -288,7 +297,7 @@ const CommentSection: React.FC<CommentSectionProps> = ({
               {comment.isLiked ? <Favorite fontSize="small" /> : <FavoriteBorder fontSize="small" />}
             </IconButton>
             <Typography variant="caption" color="text.secondary">
-              {comment.likesCount || comment.likes.length}
+                                      {comment.likesCount || 0}
             </Typography>
             
             <Button

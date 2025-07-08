@@ -9,6 +9,7 @@ import {
   Skeleton,
   CircularProgress
 } from '@mui/material';
+import { getImageUrl } from '../utils/imageUtils';
 import {
   Close,
   NavigateBefore,
@@ -188,7 +189,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
     if (currentMedia.type === 'image') {
       return (
         <img
-          src={currentMedia.url}
+          src={getImageUrl(currentMedia.url)}
           alt={currentMedia.alt || 'Media content'}
           style={mediaStyle}
           onLoad={handleImageLoad}
@@ -198,7 +199,7 @@ const MediaViewer: React.FC<MediaViewerProps> = ({
     } else if (currentMedia.type === 'video') {
       return (
         <video
-          src={currentMedia.url}
+          src={getImageUrl(currentMedia.url)}
           style={mediaStyle}
           onLoadedData={handleVideoLoad}
           onError={handleVideoError}

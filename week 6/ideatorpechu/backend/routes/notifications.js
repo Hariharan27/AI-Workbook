@@ -189,15 +189,80 @@ router.get('/suggested-users', async (req, res) => {
       _id: { $nin: [...followingIds, req.user._id] },
       isPrivate: false
     })
-    .select('username firstName lastName avatar bio followersCount createdAt lastSeen')
+    .select('username firstName lastName avatar bio location isVerified isPrivate createdAt lastSeen')
     .sort({ followersCount: -1 })
     .limit(parseInt(limit));
+
+    // Get user IDs for batch stats calculation
+    const userIds = suggestedUsers.map(user => user._id);
+
+    // Calculate stats in batch using aggregation
+    const statsAggregation = await Post.aggregate([
+      {
+        $match: {
+          author: { $in: userIds },
+          isPublic: true
+        }
+      },
+      {
+        $group: {
+          _id: '$author',
+          postsCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const followersAggregation = await Relationship.aggregate([
+      {
+        $match: {
+          following: { $in: userIds },
+          status: 'accepted'
+        }
+      },
+      {
+        $group: {
+          _id: '$following',
+          followersCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const followingAggregation = await Relationship.aggregate([
+      {
+        $match: {
+          follower: { $in: userIds },
+          status: 'accepted'
+        }
+      },
+      {
+        $group: {
+          _id: '$follower',
+          followingCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Create lookup maps for quick access
+    const postsMap = new Map(statsAggregation.map(item => [item._id.toString(), item.postsCount]));
+    const followersMap = new Map(followersAggregation.map(item => [item._id.toString(), item.followersCount]));
+    const followingMap = new Map(followingAggregation.map(item => [item._id.toString(), item.followingCount]));
+
+    // Add stats to users
+    const usersWithStats = suggestedUsers.map(user => ({
+      ...user.toObject(),
+      stats: {
+        postsCount: postsMap.get(user._id.toString()) || 0,
+        followersCount: followersMap.get(user._id.toString()) || 0,
+        followingCount: followingMap.get(user._id.toString()) || 0,
+        profileViews: 0 // TODO: Implement profile views tracking
+      }
+    }));
     
     res.json({
       success: true,
       data: { 
-        users: suggestedUsers,
-        message: suggestedUsers.length === 0 ? 'No users available for suggestions' : 'Suggested users retrieved successfully'
+        users: usersWithStats,
+        message: usersWithStats.length === 0 ? 'No users available for suggestions' : 'Suggested users retrieved successfully'
       },
       message: 'Suggested users retrieved successfully'
     });

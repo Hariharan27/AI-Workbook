@@ -105,11 +105,22 @@ export interface Post {
   _id: string;
   content: string;
   author: User;
-  media?: string[];
+  media?: Array<{
+    type: 'image' | 'video';
+    url: string;
+    thumbnail?: string;
+    metadata?: {
+      size?: number;
+      duration?: number;
+      dimensions?: { width: number; height: number };
+    };
+  }>;
   hashtags?: string[];
   mentions?: User[];
   location?: string;
   isPublic: boolean;
+  isShared?: boolean;
+  originalPost?: string;
   stats: {
     likesCount: number;
     commentsCount: number;
@@ -128,8 +139,7 @@ export interface Comment {
   post: string;
   parentComment?: string;
   replies?: Comment[];
-  likes: string[]; // Array of user IDs who liked the comment
-  likesCount?: number; // Actual like count from backend
+  likesCount: number; // Like count from backend (always accurate)
   isLiked: boolean;
   createdAt: string;
   updatedAt: string;
@@ -230,35 +240,35 @@ export const authAPI = {
 // Posts API
 export const postsAPI = {
   getFeed: async (page = 1, limit = 20): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ success: boolean; data: { posts: Post[] }; message: string }> = await api.get('/feed', {
+    const response: AxiosResponse<{ success: boolean; data: { posts: Post[]; pagination: any }; message: string }> = await api.get('/feed', {
       params: { page, limit }
     });
     return {
       posts: response.data.data.posts,
-      total: response.data.data.posts.length,
-      hasMore: response.data.data.posts.length === parseInt(limit.toString())
+      total: response.data.data.pagination?.total || response.data.data.posts.length,
+      hasMore: response.data.data.pagination?.hasMore || response.data.data.posts.length === parseInt(limit.toString())
     };
   },
 
   getTrendingPosts: async (page = 1, limit = 20): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ success: boolean; data: { posts: Post[] }; message: string }> = await api.get('/posts/trending', {
+    const response: AxiosResponse<{ success: boolean; data: { posts: Post[]; pagination: any }; message: string }> = await api.get('/posts/trending', {
       params: { page, limit }
     });
     return {
       posts: response.data.data.posts,
-      total: response.data.data.posts.length,
-      hasMore: response.data.data.posts.length === parseInt(limit.toString())
+      total: response.data.data.pagination?.total || response.data.data.posts.length,
+      hasMore: response.data.data.pagination?.hasMore || response.data.data.posts.length === parseInt(limit.toString())
     };
   },
 
   getFollowingPosts: async (page = 1, limit = 20): Promise<{ posts: Post[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ success: boolean; data: { posts: Post[] }; message: string }> = await api.get('/posts/following', {
+    const response: AxiosResponse<{ success: boolean; data: { posts: Post[]; pagination: any }; message: string }> = await api.get('/posts/following', {
       params: { page, limit }
     });
     return {
       posts: response.data.data.posts,
-      total: response.data.data.posts.length,
-      hasMore: response.data.data.posts.length === parseInt(limit.toString())
+      total: response.data.data.pagination?.total || response.data.data.posts.length,
+      hasMore: response.data.data.pagination?.hasMore || response.data.data.posts.length === parseInt(limit.toString())
     };
   },
 

@@ -333,6 +333,32 @@ class SocketService {
           message: `${socket.user.username} liked your post`,
           data: { postId, userId }
         });
+
+        // Emit feed update to author and followers
+        this.io.to(`user:${post.author}`).emit('feed:update', {
+          type: 'post_liked',
+          postId,
+          userId,
+          username: socket.user.username,
+          newLikeCount: actualLikeCount
+        });
+
+        // Emit to followers
+        const Relationship = require('../models/Relationship');
+        const followers = await Relationship.find({
+          following: post.author,
+          status: 'accepted'
+        }).select('follower');
+
+        followers.forEach(follower => {
+          this.io.to(`user:${follower.follower}`).emit('feed:update', {
+            type: 'post_liked',
+            postId,
+            userId,
+            username: socket.user.username,
+            newLikeCount: actualLikeCount
+          });
+        });
       }
     } catch (error) {
       console.error('Error handling post like:', error);

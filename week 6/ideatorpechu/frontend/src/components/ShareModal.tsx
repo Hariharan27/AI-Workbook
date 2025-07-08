@@ -19,7 +19,9 @@ import {
   IconButton,
   InputAdornment,
   CircularProgress,
-  Alert
+  Alert,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Close,
@@ -32,10 +34,13 @@ import {
   Email,
   Link,
   ContentCopy,
-  CheckCircle
+  CheckCircle,
+  ShareOutlined,
+  People,
+  Public
 } from '@mui/icons-material';
 import { useDebounce } from '../hooks/useDebounce';
-import { notificationsAPI } from '../services/api';
+import { sharesAPI, notificationsAPI } from '../services/api';
 
 interface User {
   _id: string;
@@ -57,6 +62,21 @@ interface Post {
     avatar?: string;
   };
   hashtags?: string[];
+  media?: Array<{
+    type: 'image' | 'video';
+    url: string;
+    thumbnail?: string;
+    metadata?: {
+      size?: number;
+      duration?: number;
+      dimensions?: { width: number; height: number };
+    };
+  }>;
+  stats: {
+    likesCount: number;
+    commentsCount: number;
+    sharesCount: number;
+  };
   createdAt: string;
 }
 
@@ -84,6 +104,8 @@ const ShareModal: React.FC<ShareModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [shareMessage, setShareMessage] = useState('');
   const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState(0);
+  const [shareLoading, setShareLoading] = useState(false);
   const debouncedSearch = useDebounce(searchQuery, 300);
 
   useEffect(() => {
@@ -105,6 +127,7 @@ const ShareModal: React.FC<ShareModalProps> = ({
       setSelectedUsers([]);
       setShareMessage('');
       setCopied(false);
+      setActiveTab(0);
     }
   }, [open]);
 
@@ -129,11 +152,20 @@ const ShareModal: React.FC<ShareModalProps> = ({
     );
   };
 
-  const handleShareToUsers = () => {
-    selectedUsers.forEach(userId => {
-      onShareToUser?.(userId, shareMessage);
-    });
-    onClose();
+  const handleShareToUsers = async () => {
+    if (selectedUsers.length === 0) return;
+    
+    setShareLoading(true);
+    try {
+      for (const userId of selectedUsers) {
+        await onShareToUser?.(userId, shareMessage);
+      }
+      onClose();
+    } catch (error) {
+      console.error('Error sharing with users:', error);
+    } finally {
+      setShareLoading(false);
+    }
   };
 
   const handleShareToPlatform = (platform: string) => {
@@ -184,6 +216,10 @@ const ShareModal: React.FC<ShareModalProps> = ({
     { name: 'WhatsApp', icon: <WhatsApp />, color: '#25D366' },
     { name: 'Email', icon: <Email />, color: '#EA4335' }
   ];
+
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setActiveTab(newValue);
+  };
 
   return (
     <Dialog
@@ -245,111 +281,127 @@ const ShareModal: React.FC<ShareModalProps> = ({
           sx={{ mb: 3 }}
         />
 
-        {/* Social Platforms */}
-        <Typography variant="subtitle2" gutterBottom>
-          Share to social media
-        </Typography>
-        <Box display="flex" gap={1} mb={3}>
-          {socialPlatforms.map(platform => (
-            <IconButton
-              key={platform.name}
-              onClick={() => handleShareToPlatform(platform.name.toLowerCase())}
-              sx={{
-                backgroundColor: platform.color,
-                color: 'white',
-                '&:hover': { backgroundColor: platform.color, opacity: 0.8 }
-              }}
-            >
-              {platform.icon}
-            </IconButton>
-          ))}
+        {/* Tabs */}
+        <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+          <Tabs value={activeTab} onChange={handleTabChange}>
+            <Tab icon={<Public />} label="External" />
+            <Tab icon={<People />} label="Users" />
+          </Tabs>
         </Box>
 
-        {/* Copy Link */}
-        <Box display="flex" alignItems="center" gap={1} mb={3}>
-          <Button
-            variant="outlined"
-            startIcon={copied ? <CheckCircle /> : <Link />}
-            onClick={handleCopyLink}
-            color={copied ? 'success' : 'primary'}
-          >
-            {copied ? 'Copied!' : 'Copy Link'}
-          </Button>
-        </Box>
-
-        <Divider sx={{ my: 2 }} />
-
-        {/* Share with Users */}
-        <Typography variant="subtitle2" gutterBottom>
-          Share with users
-        </Typography>
-
-        {/* Search Users */}
-        <TextField
-          fullWidth
-          placeholder="Search users..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <Search />
-              </InputAdornment>
-            )
-          }}
-          sx={{ mb: 2 }}
-        />
-
-        {/* Users List */}
-        <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
-          {loading ? (
-            <Box display="flex" justifyContent="center" p={2}>
-              <CircularProgress />
-            </Box>
-          ) : filteredUsers.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" textAlign="center" py={2}>
-              No users found
+        {activeTab === 0 && (
+          <>
+            {/* Social Platforms */}
+            <Typography variant="subtitle2" gutterBottom>
+              Share to social media
             </Typography>
-          ) : (
-            <List>
-              {filteredUsers.map(user => (
-                <ListItem key={user._id} disablePadding>
-                  <ListItemButton
-                    onClick={() => handleUserSelect(user._id)}
-                    selected={selectedUsers.includes(user._id)}
-                  >
-                    <ListItemAvatar>
-                      <Avatar src={user.avatar}>
-                        {user.firstName[0]}{user.lastName[0]}
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText
-                      primary={`${user.firstName} ${user.lastName}`}
-                      secondary={`@${user.username}`}
-                    />
-                    {selectedUsers.includes(user._id) && (
-                      <CheckCircle color="primary" />
-                    )}
-                  </ListItemButton>
-                </ListItem>
+            <Box display="flex" gap={1} mb={3} flexWrap="wrap">
+              {socialPlatforms.map(platform => (
+                <IconButton
+                  key={platform.name}
+                  onClick={() => handleShareToPlatform(platform.name.toLowerCase())}
+                  sx={{
+                    backgroundColor: platform.color,
+                    color: 'white',
+                    '&:hover': { backgroundColor: platform.color, opacity: 0.8 }
+                  }}
+                >
+                  {platform.icon}
+                </IconButton>
               ))}
-            </List>
-          )}
-        </Box>
+            </Box>
+
+            {/* Copy Link */}
+            <Box display="flex" alignItems="center" gap={1} mb={3}>
+              <Button
+                variant="outlined"
+                startIcon={copied ? <CheckCircle /> : <Link />}
+                onClick={handleCopyLink}
+                color={copied ? 'success' : 'primary'}
+              >
+                {copied ? 'Copied!' : 'Copy Link'}
+              </Button>
+            </Box>
+          </>
+        )}
+
+        {activeTab === 1 && (
+          <>
+            <Divider sx={{ my: 2 }} />
+
+            {/* Share with Users */}
+            <Typography variant="subtitle2" gutterBottom>
+              Share with users
+            </Typography>
+
+            {/* Search Users */}
+            <TextField
+              fullWidth
+              placeholder="Search users..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search />
+                  </InputAdornment>
+                )
+              }}
+              sx={{ mb: 2 }}
+            />
+
+            {/* Users List */}
+            <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
+              {loading ? (
+                <Box display="flex" justifyContent="center" p={2}>
+                  <CircularProgress />
+                </Box>
+              ) : filteredUsers.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" align="center" py={2}>
+                  No users found
+                </Typography>
+              ) : (
+                <List>
+                  {filteredUsers.map(user => (
+                    <ListItem key={user._id} disablePadding>
+                      <ListItemButton
+                        onClick={() => handleUserSelect(user._id)}
+                        selected={selectedUsers.includes(user._id)}
+                      >
+                        <ListItemAvatar>
+                          <Avatar src={user.avatar}>
+                            {user.firstName[0]}{user.lastName[0]}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={`${user.firstName} ${user.lastName}`}
+                          secondary={`@${user.username}`}
+                        />
+                        {selectedUsers.includes(user._id) && (
+                          <CheckCircle color="primary" />
+                        )}
+                      </ListItemButton>
+                    </ListItem>
+                  ))}
+                </List>
+              )}
+            </Box>
+          </>
+        )}
       </DialogContent>
 
-      <DialogActions sx={{ p: 2 }}>
-        <Button onClick={onClose}>
-          Cancel
-        </Button>
-        <Button
-          variant="contained"
-          startIcon={<Share />}
-          onClick={handleShareToUsers}
-          disabled={selectedUsers.length === 0}
-        >
-          Share with {selectedUsers.length} user{selectedUsers.length !== 1 ? 's' : ''}
-        </Button>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        {activeTab === 1 && (
+          <Button
+            onClick={handleShareToUsers}
+            variant="contained"
+            disabled={selectedUsers.length === 0 || shareLoading}
+            startIcon={shareLoading ? <CircularProgress size={16} /> : <Share />}
+          >
+            {shareLoading ? 'Sharing...' : `Share with ${selectedUsers.length} user${selectedUsers.length !== 1 ? 's' : ''}`}
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

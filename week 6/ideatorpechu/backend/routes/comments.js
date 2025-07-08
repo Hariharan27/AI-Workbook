@@ -182,10 +182,19 @@ router.get('/post/:postId', authenticate, async (req, res) => {
 
     const likedCommentIds = userLikes.map(like => like.comment.toString());
 
-    // Add isLiked property to comments
-    const commentsWithLikes = result.comments.map(comment => ({
-      ...comment,
-      isLiked: likedCommentIds.includes(comment._id.toString())
+    // Add isLiked property and correct like counts to comments
+    const commentsWithLikes = await Promise.all(result.comments.map(async (comment) => {
+      // Get actual like count from Like model
+      const actualLikeCount = await Like.countDocuments({ 
+        comment: comment._id, 
+        type: 'comment' 
+      });
+      
+      return {
+        ...comment,
+        isLiked: likedCommentIds.includes(comment._id.toString()),
+        likesCount: actualLikeCount // Always use the correct count from Like model
+      };
     }));
 
     console.log(`[COMMENTS] Returning ${commentsWithLikes.length} comments with likes`);
@@ -238,13 +247,20 @@ router.get('/:commentId', authenticate, async (req, res) => {
       });
     }
 
-    // Check if user liked the comment
-    const isLiked = await Like.isLikedBy(userId, commentId, 'comment');
+    // Check if user liked the comment and get actual like count
+    const [isLiked, actualLikeCount] = await Promise.all([
+      Like.isLikedBy(userId, commentId, 'comment'),
+      Like.countDocuments({ comment: commentId, type: 'comment' })
+    ]);
 
     res.json({
       success: true,
       data: { 
-        comment: { ...comment.toObject(), isLiked }
+        comment: { 
+          ...comment.toObject(), 
+          isLiked,
+          likesCount: actualLikeCount // Always use the correct count from Like model
+        }
       },
       message: 'Comment retrieved successfully'
     });

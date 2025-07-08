@@ -205,6 +205,34 @@ class CacheService {
     }
   }
 
+  async invalidateUserFeed(userId) {
+    try {
+      // Delete all feed cache keys for this user
+      const feedKeys = await redis.keys(`feed:${userId}:*`);
+      for (const key of feedKeys) {
+        await redis.del(key);
+      }
+      return true;
+    } catch (error) {
+      console.error('Invalidate user feed cache error:', error);
+      return false;
+    }
+  }
+
+  async invalidateAllFeeds() {
+    try {
+      // Delete all feed cache keys
+      const feedKeys = await redis.keys('feed:*');
+      for (const key of feedKeys) {
+        await redis.del(key);
+      }
+      return true;
+    } catch (error) {
+      console.error('Invalidate all feeds cache error:', error);
+      return false;
+    }
+  }
+
   async invalidatePostCache(postId) {
     const keys = [
       cacheKeys.post(postId),
