@@ -1,5 +1,6 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
+const { authenticate } = require('../middleware/authenticate');
 
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
@@ -25,7 +26,7 @@ const validateMessage = [
 ];
 
 // Get user conversations
-router.get('/conversations', [
+router.get('/conversations', authenticate, [
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
   query('limit').optional().isInt({ min: 1, max: 50 }).withMessage('Limit must be between 1 and 50'),
   query('includeArchived').optional().isBoolean().withMessage('includeArchived must be a boolean')
@@ -59,18 +60,24 @@ router.get('/conversations', [
     });
   } catch (error) {
     console.error('Get conversations error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      user: req.user?._id
+    });
     res.status(500).json({
       success: false,
       error: {
         code: 'CONVERSATIONS_ERROR',
-        message: 'Failed to retrieve conversations'
+        message: 'Failed to retrieve conversations',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       }
     });
   }
 });
 
 // Create or get direct conversation
-router.post('/conversations/direct', [
+router.post('/conversations/direct', authenticate, [
   body('participantId').isMongoId().withMessage('Invalid participant ID')
 ], async (req, res) => {
   try {
@@ -135,7 +142,7 @@ router.post('/conversations/direct', [
 });
 
 // Create group conversation
-router.post('/conversations/group', [
+router.post('/conversations/group', authenticate, [
   body('name').isLength({ min: 1, max: 100 }).withMessage('Group name must be between 1 and 100 characters'),
   body('description').optional().isLength({ max: 500 }).withMessage('Description must be less than 500 characters'),
   body('participants').isArray({ min: 2 }).withMessage('At least 2 participants are required'),
@@ -211,7 +218,7 @@ router.post('/conversations/group', [
 });
 
 // Get conversation with messages
-router.get('/conversations/:conversationId', [
+router.get('/conversations/:conversationId', authenticate, [
   param('conversationId').isMongoId().withMessage('Invalid conversation ID'),
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
   query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Limit must be between 1 and 100')
@@ -271,7 +278,7 @@ router.get('/conversations/:conversationId', [
 });
 
 // Send message
-router.post('/conversations/:conversationId/messages', [
+router.post('/conversations/:conversationId/messages', authenticate, [
   param('conversationId').isMongoId().withMessage('Invalid conversation ID'),
   ...validateMessage
 ], async (req, res) => {
@@ -392,7 +399,7 @@ router.post('/conversations/:conversationId/messages', [
 });
 
 // Mark messages as read
-router.put('/conversations/:conversationId/messages/read', [
+router.put('/conversations/:conversationId/messages/read', authenticate, [
   param('conversationId').isMongoId().withMessage('Invalid conversation ID'),
   body('messageIds').isArray({ min: 1 }).withMessage('At least one message ID is required'),
   body('messageIds.*').isMongoId().withMessage('Invalid message ID')
@@ -469,7 +476,7 @@ router.put('/conversations/:conversationId/messages/read', [
 });
 
 // Add message reaction
-router.post('/messages/:messageId/reactions', [
+router.post('/messages/:messageId/reactions', authenticate, [
   param('messageId').isMongoId().withMessage('Invalid message ID'),
   body('reaction').isIn(['like', 'love', 'haha', 'wow', 'sad', 'angry']).withMessage('Invalid reaction type')
 ], async (req, res) => {
@@ -543,7 +550,7 @@ router.post('/messages/:messageId/reactions', [
 });
 
 // Remove message reaction
-router.delete('/messages/:messageId/reactions', [
+router.delete('/messages/:messageId/reactions', authenticate, [
   param('messageId').isMongoId().withMessage('Invalid message ID')
 ], async (req, res) => {
   try {
@@ -598,7 +605,7 @@ router.delete('/messages/:messageId/reactions', [
 });
 
 // Edit message
-router.put('/messages/:messageId', [
+router.put('/messages/:messageId', authenticate, [
   param('messageId').isMongoId().withMessage('Invalid message ID'),
   body('content').isLength({ min: 1, max: 2000 }).withMessage('Message content must be between 1 and 2000 characters')
 ], async (req, res) => {
@@ -741,7 +748,7 @@ router.delete('/messages/:messageId', [
 });
 
 // Forward message
-router.post('/messages/:messageId/forward', [
+router.post('/messages/:messageId/forward', authenticate, [
   param('messageId').isMongoId().withMessage('Invalid message ID'),
   body('conversationIds').isArray({ min: 1 }).withMessage('At least one conversation ID is required'),
   body('conversationIds.*').isMongoId().withMessage('Invalid conversation ID')
@@ -813,7 +820,7 @@ router.post('/messages/:messageId/forward', [
 });
 
 // Search messages
-router.get('/messages/search', [
+router.get('/messages/search', authenticate, [
   query('q').isLength({ min: 1 }).withMessage('Search query is required'),
   query('conversationId').optional().isMongoId().withMessage('Invalid conversation ID'),
   query('page').optional().isInt({ min: 1 }).withMessage('Page must be a positive integer'),
@@ -859,7 +866,7 @@ router.get('/messages/search', [
 });
 
 // Pin message
-router.post('/conversations/:conversationId/pin/:messageId', [
+router.post('/conversations/:conversationId/pin/:messageId', authenticate, [
   param('conversationId').isMongoId().withMessage('Invalid conversation ID'),
   param('messageId').isMongoId().withMessage('Invalid message ID')
 ], async (req, res) => {
@@ -918,7 +925,7 @@ router.post('/conversations/:conversationId/pin/:messageId', [
 });
 
 // Unpin message
-router.delete('/conversations/:conversationId/pin/:messageId', [
+router.delete('/conversations/:conversationId/pin/:messageId', authenticate, [
   param('conversationId').isMongoId().withMessage('Invalid conversation ID'),
   param('messageId').isMongoId().withMessage('Invalid message ID')
 ], async (req, res) => {
@@ -974,7 +981,7 @@ router.delete('/conversations/:conversationId/pin/:messageId', [
 });
 
 // Toggle conversation mute
-router.put('/conversations/:conversationId/mute', [
+router.put('/conversations/:conversationId/mute', authenticate, [
   param('conversationId').isMongoId().withMessage('Invalid conversation ID')
 ], async (req, res) => {
   try {
@@ -1029,7 +1036,7 @@ router.put('/conversations/:conversationId/mute', [
 });
 
 // Archive conversation
-router.put('/conversations/:conversationId/archive', [
+router.put('/conversations/:conversationId/archive', authenticate, [
   param('conversationId').isMongoId().withMessage('Invalid conversation ID')
 ], async (req, res) => {
   try {
@@ -1084,7 +1091,7 @@ router.put('/conversations/:conversationId/archive', [
 });
 
 // Toggle conversation settings
-router.put('/conversations/:conversationId/settings', [
+router.put('/conversations/:conversationId/settings', authenticate, [
   param('conversationId').isMongoId().withMessage('Invalid conversation ID'),
   body('action').isIn(['mute', 'pin', 'archive']).withMessage('Invalid action')
 ], async (req, res) => {
