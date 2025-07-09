@@ -5,6 +5,8 @@ const authenticate = async (req, res, next) => {
   try {
     // Get token from header
     const authHeader = req.headers.authorization;
+    console.log('Auth header:', authHeader);
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return res.status(401).json({
         success: false,
@@ -16,6 +18,7 @@ const authenticate = async (req, res, next) => {
     }
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    console.log('Token:', token.substring(0, 50) + '...');
 
     // Check if token is blacklisted
     const isBlacklisted = await jwtService.isTokenBlacklisted(token);
@@ -31,9 +34,10 @@ const authenticate = async (req, res, next) => {
 
     // Verify token
     const decoded = jwtService.verifyAccessToken(token);
-
+    console.log('Decoded token:', decoded);
     // Get user from database
     const user = await User.findById(decoded.userId).select('-password');
+    console.log('Found user:', user ? user.username : 'null', 'ID:', user ? user._id : 'null');
     if (!user) {
       return res.status(401).json({
         success: false,

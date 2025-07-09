@@ -5,9 +5,10 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const Relationship = require('../models/Relationship');
+const { authenticate } = require('../middleware/authenticate');
 
 // Get user's notifications
-router.get('/', async (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
     const { page = 1, limit = 20, type } = req.query;
     const skip = (page - 1) * limit;
@@ -38,18 +39,24 @@ router.get('/', async (req, res) => {
     });
   } catch (error) {
     console.error('Get notifications error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      user: req.user?._id
+    });
     res.status(500).json({
       success: false,
       error: {
         code: 'NOTIFICATIONS_ERROR',
-        message: 'Failed to retrieve notifications'
+        message: 'Failed to retrieve notifications',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       }
     });
   }
 });
 
 // Mark notification as read
-router.put('/:notificationId/read', async (req, res) => {
+router.put('/:notificationId/read', authenticate, async (req, res) => {
   try {
     const { notificationId } = req.params;
     
@@ -87,7 +94,7 @@ router.put('/:notificationId/read', async (req, res) => {
 });
 
 // Mark all notifications as read
-router.put('/read-all', async (req, res) => {
+router.put('/read-all', authenticate, async (req, res) => {
   try {
     await Notification.updateMany(
       { recipient: req.user._id, isRead: false },
@@ -111,7 +118,7 @@ router.put('/read-all', async (req, res) => {
 });
 
 // Get unread notifications count
-router.get('/unread-count', async (req, res) => {
+router.get('/unread-count', authenticate, async (req, res) => {
   try {
     const count = await Notification.countDocuments({
       recipient: req.user._id,
@@ -136,7 +143,7 @@ router.get('/unread-count', async (req, res) => {
 });
 
 // Delete notification
-router.delete('/:notificationId', async (req, res) => {
+router.delete('/:notificationId', authenticate, async (req, res) => {
   try {
     const { notificationId } = req.params;
     
@@ -172,7 +179,7 @@ router.delete('/:notificationId', async (req, res) => {
 });
 
 // Get suggested users for notifications
-router.get('/suggested-users', async (req, res) => {
+router.get('/suggested-users', authenticate, async (req, res) => {
   try {
     const { limit = 5 } = req.query;
     
@@ -189,72 +196,20 @@ router.get('/suggested-users', async (req, res) => {
       _id: { $nin: [...followingIds, req.user._id] },
       isPrivate: false
     })
-    .select('username firstName lastName avatar bio location isVerified isPrivate createdAt lastSeen')
-    .sort({ followersCount: -1 })
+    .select('username firstName lastName avatar bio location isVerified isPrivate createdAt lastSeen stats')
+    .sort({ 'stats.followersCount': -1 })
     .limit(parseInt(limit));
 
-    // Get user IDs for batch stats calculation
-    const userIds = suggestedUsers.map(user => user._id);
+    // Use existing stats from User model (no need for additional aggregation)
 
-    // Calculate stats in batch using aggregation
-    const statsAggregation = await Post.aggregate([
-      {
-        $match: {
-          author: { $in: userIds },
-          isPublic: true
-        }
-      },
-      {
-        $group: {
-          _id: '$author',
-          postsCount: { $sum: 1 }
-        }
-      }
-    ]);
-
-    const followersAggregation = await Relationship.aggregate([
-      {
-        $match: {
-          following: { $in: userIds },
-          status: 'accepted'
-        }
-      },
-      {
-        $group: {
-          _id: '$following',
-          followersCount: { $sum: 1 }
-        }
-      }
-    ]);
-
-    const followingAggregation = await Relationship.aggregate([
-      {
-        $match: {
-          follower: { $in: userIds },
-          status: 'accepted'
-        }
-      },
-      {
-        $group: {
-          _id: '$follower',
-          followingCount: { $sum: 1 }
-        }
-      }
-    ]);
-
-    // Create lookup maps for quick access
-    const postsMap = new Map(statsAggregation.map(item => [item._id.toString(), item.postsCount]));
-    const followersMap = new Map(followersAggregation.map(item => [item._id.toString(), item.followersCount]));
-    const followingMap = new Map(followingAggregation.map(item => [item._id.toString(), item.followingCount]));
-
-    // Add stats to users
+    // Add stats to users (use existing stats from User model)
     const usersWithStats = suggestedUsers.map(user => ({
       ...user.toObject(),
       stats: {
-        postsCount: postsMap.get(user._id.toString()) || 0,
-        followersCount: followersMap.get(user._id.toString()) || 0,
-        followingCount: followingMap.get(user._id.toString()) || 0,
-        profileViews: 0 // TODO: Implement profile views tracking
+        postsCount: user.stats?.postsCount || 0,
+        followersCount: user.stats?.followersCount || 0,
+        followingCount: user.stats?.followingCount || 0,
+        profileViews: user.stats?.profileViews || 0
       }
     }));
     
@@ -268,11 +223,17 @@ router.get('/suggested-users', async (req, res) => {
     });
   } catch (error) {
     console.error('Get suggested users error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      user: req.user?._id
+    });
     res.status(500).json({
       success: false,
       error: {
         code: 'SUGGESTED_USERS_ERROR',
-        message: 'Failed to get suggested users'
+        message: 'Failed to get suggested users',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
       }
     });
   }
