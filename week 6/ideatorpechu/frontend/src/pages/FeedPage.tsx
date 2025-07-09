@@ -19,6 +19,8 @@ import { Add } from '@mui/icons-material';
 import InfiniteScroll from 'react-infinite-scroll-component';
 import PostCard from '../components/PostCard';
 import PostEditor from '../components/PostEditor';
+import EditPostModal from '../components/EditPostModal';
+import DeletePostModal from '../components/DeletePostModal';
 import CommentSection from '../components/CommentSection';
 import ShareModal from '../components/ShareModal';
 import { postsAPI, likesAPI, sharesAPI } from '../services/api';
@@ -31,31 +33,31 @@ interface FeedPageProps {
   setShowPostEditor?: (show: boolean) => void;
 }
 
-const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setShowPostEditor }) => {
-  const { user: currentUser } = useAuth();
-  const [activeTab, setActiveTab] = useState(0);
+const FeedPage: React.FC<FeedPageProps> = ({
+  currentUserId,
+  showPostEditor,
+  setShowPostEditor
+}) => {
+  const { user } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(true);
+  const [activeTab, setActiveTab] = useState(0);
   const [page, setPage] = useState(1);
-  const [refreshing, setRefreshing] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
-
-  // State for share modal
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [selectedPostForShare, setSelectedPostForShare] = useState<Post | null>(null);
-
-  // State for notifications
-  const [snackbar, setSnackbar] = useState<{
-    open: boolean;
-    message: string;
-    severity: 'success' | 'error' | 'info' | 'warning';
-  }>({
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
     message: '',
-    severity: 'info'
+    severity: 'success'
   });
+
+  // Edit and Delete modal states
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   // Real API call to fetch posts
   const fetchPosts = async (pageNum: number = 1, filter: string = 'latest') => {
@@ -100,10 +102,8 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
   };
 
   const refreshFeed = async () => {
-    setRefreshing(true);
     setPage(1);
     await fetchPosts(1, ['latest', 'trending', 'following'][activeTab]);
-    setRefreshing(false);
   };
 
   useEffect(() => {
@@ -112,7 +112,7 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
 
   // Listen for real-time feed updates
   useEffect(() => {
-    if (!currentUser) return;
+    if (!user) return;
 
     const handleFeedUpdate = (data: any) => {
       console.log('Feed update received:', data);
@@ -139,7 +139,7 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
     return () => {
       socketService.removeFeedUpdateListener(handleFeedUpdate);
     };
-  }, [currentUser]);
+  }, [user]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
     setActiveTab(newValue);
@@ -251,17 +251,51 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
   };
 
   const handleEdit = (postId: string) => {
-    // TODO: Open edit modal
-    console.log('Edit post:', postId);
+    const post = posts.find(p => p._id === postId);
+    if (post) {
+      setSelectedPost(post);
+      setEditModalOpen(true);
+    }
   };
 
-  const handleDelete = async (postId: string) => {
-    try {
-      // TODO: Implement delete functionality
-      setPosts(prev => prev.filter(post => post._id !== postId));
-    } catch (err) {
-      console.error('Error deleting post:', err);
+  const handleDelete = (postId: string) => {
+    const post = posts.find(p => p._id === postId);
+    if (post) {
+      setSelectedPost(post);
+      setDeleteModalOpen(true);
     }
+  };
+
+  const handlePostUpdated = (updatedPost: Post) => {
+    setPosts(prev => prev.map(p => 
+      p._id === updatedPost._id ? updatedPost : p
+    ));
+    
+    setSnackbar({
+      open: true,
+      message: 'Post updated successfully!',
+      severity: 'success'
+    });
+  };
+
+  const handlePostDeleted = (postId: string) => {
+    setPosts(prev => prev.filter(p => p._id !== postId));
+    
+    setSnackbar({
+      open: true,
+      message: 'Post deleted successfully!',
+      severity: 'success'
+    });
+  };
+
+  const handleCloseEditModal = () => {
+    setEditModalOpen(false);
+    setSelectedPost(null);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setSelectedPost(null);
   };
 
   const handleReport = (postId: string) => {
@@ -347,6 +381,26 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
         />
       )}
 
+      {/* Edit Post Modal */}
+      {selectedPost && (
+        <EditPostModal
+          post={selectedPost}
+          open={editModalOpen}
+          onClose={handleCloseEditModal}
+          onPostUpdated={handlePostUpdated}
+        />
+      )}
+
+      {/* Delete Post Modal */}
+      {selectedPost && (
+        <DeletePostModal
+          post={selectedPost}
+          open={deleteModalOpen}
+          onClose={handleCloseDeleteModal}
+          onPostDeleted={handlePostDeleted}
+        />
+      )}
+
       {/* Feed Content */}
       <Box>
         {error && (
@@ -419,7 +473,7 @@ const FeedPage: React.FC<FeedPageProps> = ({ currentUserId, showPostEditor, setS
                   <CommentSection
                     postId={post._id}
                     currentUserId={currentUserId}
-                    currentUser={currentUser}
+                    currentUser={user}
                     onCommentAdded={() => {
                       // Refresh the post to update comment count
                       setPosts(prev => prev.map(p => 

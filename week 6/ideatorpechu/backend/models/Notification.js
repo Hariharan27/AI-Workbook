@@ -14,7 +14,7 @@ const notificationSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['like', 'comment', 'follow', 'mention', 'share', 'reply'],
+    enum: ['like', 'comment', 'follow', 'unfollow', 'mention', 'share', 'reply', 'message', 'new_post'],
     required: true
   },
   post: {
@@ -24,6 +24,10 @@ const notificationSchema = new mongoose.Schema({
   comment: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Comment'
+  },
+  conversation: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Conversation'
   },
   isRead: {
     type: Boolean,
@@ -135,6 +139,18 @@ notificationSchema.pre('save', function(next) {
       case 'reply':
         this.title = `${sender.firstName || sender.username} replied to your comment`;
         this.message = 'replied to your comment';
+        break;
+      case 'unfollow':
+        this.title = `${sender.firstName || sender.username} unfollowed you`;
+        this.message = 'unfollowed you';
+        break;
+      case 'message':
+        this.title = `New message from ${sender.firstName || sender.username}`;
+        this.message = 'sent you a message';
+        break;
+      case 'new_post':
+        this.title = `${sender.firstName || sender.username} created a new post`;
+        this.message = 'created a new post';
         break;
       default:
         this.title = 'New notification';

@@ -7,6 +7,9 @@ const Comment = require('../models/Comment');
 const Like = require('../models/Like');
 const Hashtag = require('../models/Hashtag');
 const User = require('../models/User');
+const Relationship = require('../models/Relationship');
+const Notification = require('../models/Notification');
+const socketService = require('../services/socketService');
 const { authenticate } = require('../middleware/authenticate');
 const mediaService = require('../services/mediaService');
 const path = require('path');
@@ -158,6 +161,48 @@ router.post('/',
           Hashtag.updateStats(hashtag, 1)
         );
         await Promise.all(updatePromises);
+      }
+
+      // Send notifications to followers for new post
+      try {
+        // Get all followers of the post author
+        const followers = await Relationship.find({
+          following: userId,
+          status: 'accepted'
+        }).select('follower');
+
+        // Create notifications for each follower
+        const notificationPromises = followers.map(async (follower) => {
+          const notification = await Notification.create({
+            recipient: follower.follower,
+            sender: userId,
+            type: 'new_post',
+            post: post._id,
+            title: `${req.user.firstName || req.user.username} created a new post`,
+            message: 'created a new post'
+          });
+
+          // Populate sender info for socket emission
+          await notification.populate('sender', 'username firstName lastName avatar');
+
+          // Emit real-time notification
+          socketService.emitToUser(follower.follower, 'notification:new', {
+            type: 'new_post',
+            sender: notification.sender,
+            post: post._id,
+            title: notification.title,
+            message: notification.message,
+            createdAt: notification.createdAt
+          });
+
+          return notification;
+        });
+
+        await Promise.all(notificationPromises);
+        console.log(`Sent new post notifications to ${followers.length} followers`);
+      } catch (notificationError) {
+        console.error('Failed to create new post notifications:', notificationError);
+        // Don't fail the post creation if notification fails
       }
 
       // Update user's post count
@@ -388,8 +433,7 @@ router.get('/following', authenticate, async (req, res) => {
     const posts = await Post.aggregate([
       {
         $match: {
-          author: { $in: followingIds },
-          author: { $ne: userId }, // Exclude user's own posts
+          author: { $in: followingIds, $ne: userId }, // Only posts from people you follow, excluding your own
           isPublic: true
           // 'moderation.status': 'approved' // Temporarily disabled for testing
         }
@@ -463,8 +507,7 @@ router.get('/following', authenticate, async (req, res) => {
 
     // Calculate total count for pagination
     const total = await Post.countDocuments({
-      author: { $in: followingIds },
-      author: { $ne: userId },
+      author: { $in: followingIds, $ne: userId }, // Only posts from people you follow, excluding your own
       isPublic: true
     });
     
@@ -567,7 +610,7 @@ router.put('/:postId',
   async (req, res) => {
     try {
       const { postId } = req.params;
-      const { content, isPublic } = req.body;
+      const { content, isPublic = 'true', location } = req.body;
       const userId = req.user._id;
 
       const post = await Post.findById(postId);
@@ -594,14 +637,22 @@ router.put('/:postId',
         });
       }
 
-      // Handle media updates
-      let media = post.media;
+      // Handle media updates - keep existing media and add new ones
+      let media = [...post.media]; // Keep existing media
       if (req.files && req.files.length > 0) {
-        const uploadPromises = req.files.map(file => 
-          mediaService.uploadFile(file, { folder: 'ideatorpechu/posts' })
-        );
-        const newMedia = await Promise.all(uploadPromises);
-        media = [...media, ...newMedia];
+        const newMedia = req.files.map(file => {
+          // Map MIME type to enum value
+          let mediaType = 'image';
+          if (file.mimetype.startsWith('video/')) {
+            mediaType = 'video';
+          }
+          
+          return {
+            url: `/uploads/${path.basename(file.path)}`,
+            type: mediaType
+          };
+        });
+        media = [...media, ...newMedia]; // Add new media to existing
       }
 
       // Resolve mentions
@@ -620,7 +671,7 @@ router.put('/:postId',
           content,
           media,
           mentions,
-          isPublic,
+          isPublic: isPublic === 'true' || isPublic === true,
           isEdited: true,
           editHistory
         },
@@ -676,12 +727,23 @@ router.delete('/:postId', authenticate, async (req, res) => {
       });
     }
 
-    // Delete media files from Cloudinary
+    // Delete media files from local storage
     if (post.media && post.media.length > 0) {
-      const deletePromises = post.media.map(media => 
-        mediaService.deleteFile(media.publicId, media.type)
-      );
-      await Promise.all(deletePromises);
+      const fs = require('fs');
+      const uploadsDir = path.join(__dirname, '../../uploads');
+      
+      for (const media of post.media) {
+        try {
+          const filePath = path.join(uploadsDir, path.basename(media.url));
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`Deleted file: ${filePath}`);
+          }
+        } catch (fileError) {
+          console.error(`Error deleting file ${media.url}:`, fileError);
+          // Continue with deletion even if file deletion fails
+        }
+      }
     }
 
     // Update hashtag statistics

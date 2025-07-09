@@ -272,18 +272,23 @@ const PostCard: React.FC<PostCardProps> = ({
         </Typography>
 
         {/* Media Display */}
-        {post.media && post.media.length > 0 && (
+        {post.media && post.media.length > 0 ? (
           <Box sx={{ mb: 2 }}>
             <Box
               sx={{
-                display: 'grid',
-                gridTemplateColumns: post.media.length === 1 ? '1fr' : '1fr 1fr',
+                display: 'flex',
+                flexDirection: 'column',
                 gap: 1
               }}
             >
               {post.media.map((media, index) => {
                 const url = getImageUrl(media.url);
-                console.log('Rendering image:', url);
+                console.log('PostCard - Media data:', {
+                  originalUrl: media.url,
+                  processedUrl: url,
+                  mediaType: media.type,
+                  postId: post._id
+                });
                 return (
                   <Box
                     key={index}
@@ -292,15 +297,23 @@ const PostCard: React.FC<PostCardProps> = ({
                     alt={`Post media ${index + 1}`}
                     sx={{
                       width: '100%',
-                      height: post.media!.length === 1 ? 300 : 150,
+                      height: 300,
                       objectFit: 'cover',
                       borderRadius: 1,
                       cursor: 'pointer'
                     }}
+                    onLoad={() => console.log('Image loaded successfully:', url)}
+                    onError={(e) => console.error('Image failed to load:', url, e)}
                   />
                 );
               })}
             </Box>
+          </Box>
+        ) : (
+          <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Debug: No media found for this post. Post ID: {post._id}
+            </Typography>
           </Box>
         )}
 

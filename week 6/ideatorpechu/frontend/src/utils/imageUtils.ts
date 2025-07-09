@@ -11,6 +11,7 @@ export const getImageUrl = (imagePath: string): string => {
   
   // If it starts with /uploads, prepend the backend base URL
   if (imagePath.startsWith('/uploads/')) {
+    // Encode the path to handle spaces and special characters
     return `${BACKEND_BASE_URL}${encodeURI(imagePath)}`;
   }
   

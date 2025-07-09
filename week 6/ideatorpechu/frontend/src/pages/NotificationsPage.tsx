@@ -55,70 +55,153 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
     message: ''
   });
 
-  const tabLabels = ['All', 'Unread', 'Following', 'Mentions'];
+  const tabLabels = ['All', 'Unread', 'Following', 'Mentions', 'New Posts'];
 
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        
-        // Fetch notifications
-        const notificationsData = await notificationsAPI.getNotifications(1, 50);
-        setNotifications(notificationsData.notifications || []);
-        setUnreadCount(notificationsData.notifications?.filter(n => !n.isRead).length || 0);
-        
-        // Fetch suggested users
-        const suggestedUsersData = await notificationsAPI.getSuggestedUsers(5);
-        setSuggestedUsers(suggestedUsersData.users || []);
-        
-      } catch (err: any) {
-        setError(err.message || 'Failed to load notifications');
-        console.error('Notifications error:', err);
-      } finally {
-        setLoading(false);
+  // Function to get notification type based on tab
+  const getNotificationType = (tabIndex: number): string | undefined => {
+    switch (tabIndex) {
+      case 0: return undefined; // All
+      case 1: return undefined; // Unread (handled by backend)
+      case 2: return 'follow'; // Following
+      case 3: return 'mention'; // Mentions
+      case 4: return 'new_post'; // New Posts
+      default: return undefined;
+    }
+  };
+
+  // Function to fetch notifications with proper API integration
+  const fetchNotifications = async (tabIndex: number = activeTab) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const notificationType = getNotificationType(tabIndex);
+      console.log(`[NOTIFICATIONS] Fetching notifications for tab ${tabIndex} (${tabLabels[tabIndex]}), type: ${notificationType || 'all'}`);
+      
+      // Fetch notifications with proper filtering
+      const notificationsData = await notificationsAPI.getNotifications(1, 50, notificationType);
+      console.log(`[NOTIFICATIONS] Received ${notificationsData.notifications?.length || 0} notifications`);
+      console.log(`[NOTIFICATIONS] Notification types:`, notificationsData.notifications?.map(n => n.type));
+      
+      let finalNotifications = notificationsData.notifications || [];
+      
+      // For unread tab, we need to filter client-side since backend doesn't support unread-only
+      if (tabIndex === 1) {
+        const unreadNotifications = finalNotifications.filter(n => !n.isRead);
+        console.log(`[NOTIFICATIONS] Filtered to ${unreadNotifications.length} unread notifications`);
+        finalNotifications = unreadNotifications;
       }
-    };
+      
+      setNotifications(finalNotifications);
+      
+      // Update unread count from total notifications (always get from "all" notifications)
+      if (tabIndex !== 0) {
+        // Get total unread count by fetching all notifications
+        const allNotificationsData = await notificationsAPI.getNotifications(1, 50);
+        const totalUnreadCount = allNotificationsData.notifications?.filter(n => !n.isRead).length || 0;
+        setUnreadCount(totalUnreadCount);
+      } else {
+        // For "All" tab, calculate unread count from current notifications
+        const totalUnreadCount = finalNotifications.filter(n => !n.isRead).length;
+        setUnreadCount(totalUnreadCount);
+      }
+      
+      // Fetch suggested users only for "All" tab
+      if (tabIndex === 0) {
+        try {
+          const suggestedUsersData = await notificationsAPI.getSuggestedUsers(5);
+          setSuggestedUsers(suggestedUsersData.users || []);
+          console.log(`[NOTIFICATIONS] Fetched ${suggestedUsersData.users?.length || 0} suggested users`);
+        } catch (suggestedError) {
+          console.error('Failed to fetch suggested users:', suggestedError);
+          // Don't fail the whole page for suggested users
+        }
+      }
+      
+    } catch (err: any) {
+      setError(err.message || 'Failed to load notifications');
+      console.error('Notifications error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  // Initial load
+  useEffect(() => {
     fetchNotifications();
   }, []);
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  // Handle tab changes with API calls
+  const handleTabChange = async (event: React.SyntheticEvent, newValue: number) => {
+    console.log(`[NOTIFICATIONS] Tab changed from ${activeTab} to ${newValue}`);
     setActiveTab(newValue);
+    
+    // Fetch notifications for the new tab
+    await fetchNotifications(newValue);
   };
 
   const handleMarkAsRead = async (notificationId: string) => {
     try {
+      console.log(`[NOTIFICATIONS] Marking notification ${notificationId} as read`);
       await notificationsAPI.markAsRead(notificationId);
+      
+      // Update local state
       setNotifications(prev => prev.map(n => 
         n._id === notificationId ? { ...n, isRead: true } : n
       ));
       setUnreadCount(prev => Math.max(0, prev - 1));
+      
+      setSnackbar({ open: true, message: 'Notification marked as read' });
     } catch (err: any) {
       setSnackbar({ open: true, message: err.message || 'Failed to mark as read' });
       console.error('Mark as read error:', err);
     }
   };
 
-  const handleDeleteNotification = (notificationId: string) => {
-    setNotifications(prev => prev.filter(n => n._id !== notificationId));
-    // Update unread count if the deleted notification was unread
-    const deletedNotification = notifications.find(n => n._id === notificationId);
-    if (deletedNotification && !deletedNotification.isRead) {
-      setUnreadCount(prev => Math.max(0, prev - 1));
+  const handleDeleteNotification = async (notificationId: string) => {
+    try {
+      console.log(`[NOTIFICATIONS] Deleting notification ${notificationId}`);
+      await notificationsAPI.deleteNotification(notificationId);
+      
+      // Update local state
+      setNotifications(prev => prev.filter(n => n._id !== notificationId));
+      
+      // Update unread count if the deleted notification was unread
+      const deletedNotification = notifications.find(n => n._id === notificationId);
+      if (deletedNotification && !deletedNotification.isRead) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+      
+      setSnackbar({ open: true, message: 'Notification deleted' });
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || 'Failed to delete notification' });
+      console.error('Delete notification error:', err);
     }
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, isRead: true }))
-    );
-    setUnreadCount(0);
+  const handleMarkAllAsRead = async () => {
+    try {
+      console.log(`[NOTIFICATIONS] Marking all notifications as read`);
+      await notificationsAPI.markAllAsRead();
+      
+      // Update local state
+      setNotifications(prev => 
+        prev.map(notification => ({ ...notification, isRead: true }))
+      );
+      setUnreadCount(0);
+      
+      setSnackbar({ open: true, message: 'All notifications marked as read' });
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || 'Failed to mark all as read' });
+      console.error('Mark all as read error:', err);
+    }
   };
 
   const handleFollowUser = async (userId: string) => {
     try {
+      console.log(`[NOTIFICATIONS] Following user ${userId}`);
       await usersAPI.followUser(userId);
+      
       setSuggestedUsers(prev => prev.map(user => 
         user._id === userId ? { ...user, isFollowing: true } : user
       ));
@@ -129,32 +212,24 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
     }
   };
 
-  const handleUnfollowUser = (userId: string) => {
-    setSuggestedUsers(prev => 
-      prev.map(user => 
-        user._id === userId 
-          ? { ...user, isFollowing: false }
-          : user
-      )
-    );
-  };
-
-  const getFilteredNotifications = () => {
-    switch (activeTab) {
-      case 0: // All
-        return notifications;
-      case 1: // Unread
-        return notifications.filter(n => !n.isRead);
-      case 2: // Following
-        return notifications.filter(n => n.type === 'follow');
-      case 3: // Mentions
-        return notifications.filter(n => n.type === 'mention');
-      default:
-        return notifications;
+  const handleUnfollowUser = async (userId: string) => {
+    try {
+      console.log(`[NOTIFICATIONS] Unfollowing user ${userId}`);
+      await usersAPI.unfollowUser(userId);
+      
+      setSuggestedUsers(prev => 
+        prev.map(user => 
+          user._id === userId 
+            ? { ...user, isFollowing: false }
+            : user
+        )
+      );
+      setSnackbar({ open: true, message: 'User unfollowed successfully' });
+    } catch (err: any) {
+      setSnackbar({ open: true, message: err.message || 'Failed to unfollow user' });
+      console.error('Unfollow user error:', err);
     }
   };
-
-  const filteredNotifications = getFilteredNotifications();
 
   // Convert API Notification to NotificationCard Notification
   const convertNotification = (apiNotification: Notification) => {
@@ -181,7 +256,7 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
     };
   };
 
-  const convertedNotifications = filteredNotifications.map(convertNotification);
+  const convertedNotifications = notifications.map(convertNotification);
 
   if (loading) {
     return (
@@ -202,6 +277,13 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
         <Alert severity="error" sx={{ mb: 2 }}>
           {error}
         </Alert>
+        <Button 
+          variant="contained" 
+          onClick={() => fetchNotifications()}
+          sx={{ mt: 2 }}
+        >
+          Retry
+        </Button>
       </Container>
     );
   }
@@ -237,7 +319,7 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
         <Box display="flex" gap={2} mb={2}>
           <Chip
             icon={<Notifications />}
-            label={`${notifications.length} total`}
+            label={`${notifications.length} ${tabLabels[activeTab].toLowerCase()}`}
             variant="outlined"
           />
           <Chip
@@ -264,16 +346,16 @@ const NotificationsPage: React.FC<NotificationsPageProps> = ({ currentUserId }) 
       </Box>
 
       {/* Notifications List */}
-      {filteredNotifications.length === 0 ? (
+      {convertedNotifications.length === 0 ? (
         <Box textAlign="center" py={4}>
           <NotificationsOff sx={{ fontSize: 60, color: 'text.secondary', mb: 2 }} />
           <Typography variant="h6" color="text.secondary" gutterBottom>
-            {activeTab === 1 ? 'No unread notifications' : 'No notifications yet'}
+            {activeTab === 1 ? 'No unread notifications' : `No ${tabLabels[activeTab].toLowerCase()} notifications`}
           </Typography>
           <Typography variant="body2" color="text.secondary">
             {activeTab === 1 
               ? 'All caught up! Check back later for new notifications.' 
-              : 'When you get notifications, they\'ll appear here.'
+              : `No ${tabLabels[activeTab].toLowerCase()} notifications found.`
             }
           </Typography>
         </Box>

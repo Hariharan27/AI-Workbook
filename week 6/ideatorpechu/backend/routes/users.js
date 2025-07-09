@@ -5,6 +5,8 @@ const User = require('../models/User');
 const Post = require('../models/Post');
 const Relationship = require('../models/Relationship');
 const Like = require('../models/Like');
+const Notification = require('../models/Notification');
+const socketService = require('../services/socketService');
 
 // Get user profile
 router.get('/:userId', async (req, res) => {
@@ -227,8 +229,33 @@ router.post('/:userId/follow', authenticate, async (req, res) => {
 
     // Send notification if public user
     if (!userToFollow.isPrivate) {
-      // TODO: Send notification
-      console.log(`User ${currentUserId} followed user ${userId}`);
+      try {
+        // Create notification
+        const notification = await Notification.create({
+          recipient: userId,
+          sender: currentUserId,
+          type: 'follow',
+          title: `${req.user.firstName || req.user.username} started following you`,
+          message: 'started following you'
+        });
+
+        // Populate sender info for socket emission
+        await notification.populate('sender', 'username firstName lastName avatar');
+
+        // Emit real-time notification
+        socketService.emitToUser(userId, 'notification:new', {
+          type: 'follow',
+          sender: notification.sender,
+          title: notification.title,
+          message: notification.message,
+          createdAt: notification.createdAt
+        });
+
+        console.log(`User ${currentUserId} followed user ${userId} - notification sent`);
+      } catch (notificationError) {
+        console.error('Failed to create follow notification:', notificationError);
+        // Don't fail the follow operation if notification fails
+      }
     }
 
     res.json({
@@ -290,6 +317,35 @@ router.delete('/:userId/follow', authenticate, async (req, res) => {
           message: 'Not following this user'
         }
       });
+    }
+
+    // Send unfollow notification
+    try {
+      // Create notification
+      const notification = await Notification.create({
+        recipient: userId,
+        sender: currentUserId,
+        type: 'unfollow',
+        title: `${req.user.firstName || req.user.username} unfollowed you`,
+        message: 'unfollowed you'
+      });
+
+      // Populate sender info for socket emission
+      await notification.populate('sender', 'username firstName lastName avatar');
+
+      // Emit real-time notification
+      socketService.emitToUser(userId, 'notification:new', {
+        type: 'unfollow',
+        sender: notification.sender,
+        title: notification.title,
+        message: notification.message,
+        createdAt: notification.createdAt
+      });
+
+      console.log(`User ${currentUserId} unfollowed user ${userId} - notification sent`);
+    } catch (notificationError) {
+      console.error('Failed to create unfollow notification:', notificationError);
+      // Don't fail the unfollow operation if notification fails
     }
 
     res.json({

@@ -19,14 +19,17 @@ import {
   Article,
   MoreVert,
   CheckCircle,
-  Cancel
+  Cancel,
+  PersonRemove,
+  Reply,
+  Message
 } from '@mui/icons-material';
 import { formatDistanceToNow } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 
 interface Notification {
   _id: string;
-  type: 'like' | 'comment' | 'share' | 'follow' | 'mention' | 'hashtag' | 'post';
+  type: 'like' | 'comment' | 'share' | 'follow' | 'unfollow' | 'mention' | 'share' | 'reply' | 'message' | 'new_post' | 'hashtag' | 'post';
   title: string;
   message: string;
   sender?: {
@@ -87,8 +90,16 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         return <Share color="success" />;
       case 'follow':
         return <PersonAdd color="info" />;
+      case 'unfollow':
+        return <PersonRemove color="error" />;
       case 'mention':
         return <Article color="warning" />;
+      case 'reply':
+        return <Reply color="primary" />;
+      case 'message':
+        return <Message color="info" />;
+      case 'new_post':
+        return <Article color="success" />;
       case 'hashtag':
         return <Tag color="secondary" />;
       case 'post':
@@ -108,8 +119,16 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
         return 'success';
       case 'follow':
         return 'info';
+      case 'unfollow':
+        return 'error';
       case 'mention':
         return 'warning';
+      case 'reply':
+        return 'primary';
+      case 'message':
+        return 'info';
+      case 'new_post':
+        return 'success';
       case 'hashtag':
         return 'secondary';
       case 'post':
@@ -129,16 +148,27 @@ const NotificationCard: React.FC<NotificationCardProps> = ({
       case 'like':
       case 'comment':
       case 'share':
+      case 'reply':
         if (notification.post) {
           navigate(`/post/${notification.post._id}`);
         }
         break;
       case 'follow':
+      case 'unfollow':
         if (notification.sender) {
           navigate(`/profile/${notification.sender._id}`);
         }
         break;
       case 'mention':
+        if (notification.post) {
+          navigate(`/post/${notification.post._id}`);
+        }
+        break;
+      case 'message':
+        // Navigate to messages page
+        navigate('/messages');
+        break;
+      case 'new_post':
         if (notification.post) {
           navigate(`/post/${notification.post._id}`);
         }

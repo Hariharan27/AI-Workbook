@@ -18,12 +18,21 @@ const userRoutes = require('./routes/users');
 const postRoutes = require('./routes/posts');
 const commentRoutes = require('./routes/comments');
 const likeRoutes = require('./routes/likes');
+const postLikeRoutes = require('./routes/post-likes');
+const commentLikeRoutes = require('./routes/comment-likes');
 const hashtagRoutes = require('./routes/hashtags');
 const searchRoutes = require('./routes/search');
 const shareRoutes = require('./routes/shares');
 const moderationRoutes = require('./routes/moderation');
 const notificationRoutes = require('./routes/notifications');
 const messageRoutes = require('./routes/messages');
+const monitoringRoutes = require('./routes/monitoring');
+
+// Import GraphQL setup
+const { setupGraphQL } = require('./graphql/server');
+
+// Import monitoring service
+const monitoringService = require('./services/monitoringService');
 
 // Import middleware
 const { authenticate } = require('./middleware/authenticate');
@@ -56,7 +65,8 @@ const initializeApp = async () => {
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
 // CORS configuration
@@ -126,10 +136,15 @@ app.use('/api/v1/users', userRoutes);
 app.use('/api/v1/posts', postRoutes);
 app.use('/api/v1/comments', commentRoutes);
 app.use('/api/v1/likes', likeRoutes);
+app.use('/api/v1/post-likes', postLikeRoutes);
+app.use('/api/v1/comment-likes', commentLikeRoutes);
 app.use('/api/v1/hashtags', hashtagRoutes);
 app.use('/api/v1/search', searchRoutes);
 app.use('/api/v1/shares', shareRoutes);
 app.use('/api/v1/moderation', moderationRoutes);
+app.use('/api/v1/notifications', notificationRoutes);
+app.use('/api/v1/messages', messageRoutes);
+app.use('/api/v1/monitoring', monitoringRoutes);
 
 // Feed route
 app.get('/api/v1/feed', authenticate, async (req, res) => {
@@ -181,7 +196,72 @@ app.get('/api/v1/feed', authenticate, async (req, res) => {
 
 // Serve uploads directory as static files
 const path = require('path');
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+const fs = require('fs');
+
+// Custom route handler for uploads to handle URL-encoded filenames
+app.get('/uploads/*', (req, res) => {
+  // Set CORS headers for cross-origin requests
+  res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'http://localhost:3001');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  
+  // Get the file path from the URL
+  const filePath = req.params[0];
+  console.log('Uploads route - Requested file:', filePath);
+  
+  // Decode the URL-encoded filename
+  const decodedPath = decodeURIComponent(filePath);
+  console.log('Uploads route - Decoded path:', decodedPath);
+  
+  // Construct the full file path
+  const fullPath = path.join(__dirname, '../uploads', decodedPath);
+  console.log('Uploads route - Full path:', fullPath);
+  
+  // Check if file exists
+  if (!fs.existsSync(fullPath)) {
+    console.log('Uploads route - File not found:', fullPath);
+    return res.status(404).json({ error: 'File not found' });
+  }
+  
+  // Get file stats
+  const stats = fs.statSync(fullPath);
+  
+  // Set appropriate headers
+  res.setHeader('Content-Type', getMimeType(decodedPath));
+  res.setHeader('Content-Length', stats.size);
+  res.setHeader('Cache-Control', 'public, max-age=0');
+  
+  // Stream the file
+  const fileStream = fs.createReadStream(fullPath);
+  fileStream.pipe(res);
+});
+
+// OPTIONS handler for uploads route (CORS preflight)
+app.options('/uploads/*', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'http://localhost:3001');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.status(200).end();
+});
+
+// Helper function to get MIME type
+function getMimeType(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  const mimeTypes = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.mp4': 'video/mp4',
+    '.avi': 'video/x-msvideo',
+    '.mov': 'video/quicktime'
+  };
+  return mimeTypes[ext] || 'application/octet-stream';
+}
 
 // Protected routes
 app.use('/api/v1/messages', authenticate, messageRoutes);
@@ -294,6 +374,10 @@ const gracefulShutdown = async (signal) => {
   console.log(`\n${signal} received. Starting graceful shutdown...`);
   
   try {
+    // Stop monitoring service
+    monitoringService.stop();
+    console.log('Monitoring service stopped');
+    
     // Close Redis connection
     await redisClient.disconnect();
     console.log('Redis connection closed');
@@ -331,8 +415,14 @@ process.on('unhandledRejection', (reason, promise) => {
 const startServer = async () => {
   await initializeApp();
   
+  // Start monitoring service
+  monitoringService.start();
+  
   // Initialize Socket.io
   socketService.initialize(server);
+  
+  // Setup GraphQL
+  await setupGraphQL(app, server);
   
   server.listen(PORT, () => {
     console.log(`
@@ -341,10 +431,11 @@ const startServer = async () => {
 ╠══════════════════════════════════════════════════════════════╣
 ║  🚀 Server running on port ${PORT}                           ║
 ║  🌍 Environment: ${process.env.NODE_ENV || 'development'}     ║
-║  📊 Phase: 2C - Real-Time Communication                     ║
+║  📊 Phase: 3 - GraphQL & Performance Monitoring             ║
 ║  🔗 Health Check: http://localhost:${PORT}/health            ║
 ║  📚 API Base: http://localhost:${PORT}/api/v1               ║
 ║  🔌 Socket.io: ws://localhost:${PORT}                       ║
+║  🎯 GraphQL: http://localhost:${PORT}/graphql               ║
 ╚══════════════════════════════════════════════════════════════╝
     `);
   });

@@ -45,6 +45,8 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import PostCard from '../components/PostCard';
 import PostEditor from '../components/PostEditor';
+import EditPostModal from '../components/EditPostModal';
+import DeletePostModal from '../components/DeletePostModal';
 import { usersAPI, User, Post } from '../services/api';
 
 interface ProfilePageProps {
@@ -68,6 +70,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
     message: '',
     severity: 'success'
   });
+
+  // Edit and Delete modal states
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   const tabLabels = ['Posts', 'Media', 'Likes', 'Saved'];
 
@@ -195,6 +202,54 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
     setShowPostEditor(false);
   };
 
+  const handleEdit = (postId: string) => {
+    const post = posts.find(p => p._id === postId);
+    if (post) {
+      setSelectedPost(post);
+      setEditModalOpen(true);
+    }
+  };
+
+  const handleDelete = (postId: string) => {
+    const post = posts.find(p => p._id === postId);
+    if (post) {
+      setSelectedPost(post);
+      setDeleteModalOpen(true);
+    }
+  };
+
+  const handlePostUpdated = (updatedPost: Post) => {
+    setPosts(prev => prev.map(p => 
+      p._id === updatedPost._id ? updatedPost : p
+    ));
+    
+    setSnackbar({
+      open: true,
+      message: 'Post updated successfully!',
+      severity: 'success'
+    });
+  };
+
+  const handlePostDeleted = (postId: string) => {
+    setPosts(prev => prev.filter(p => p._id !== postId));
+    
+    setSnackbar({
+      open: true,
+      message: 'Post deleted successfully!',
+      severity: 'success'
+    });
+  };
+
+  const handleCloseEditModal = () => {
+    setEditModalOpen(false);
+    setSelectedPost(null);
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteModalOpen(false);
+    setSelectedPost(null);
+  };
+
   const isOwnProfile = currentUserId === userId;
 
   if (loading) {
@@ -226,7 +281,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
   }
 
   return (
-    <Container maxWidth="md" sx={{ py: 2 }}>
+    <Container maxWidth="lg" sx={{ py: 2 }}>
       {/* Cover Image */}
       <Box sx={{ position: 'relative', mb: 2 }}>
         <Box
@@ -418,6 +473,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
                 onLike={() => {}}
                 onComment={() => {}}
                 onShare={() => {}}
+                onEdit={() => handleEdit(post._id)}
+                onDelete={() => handleDelete(post._id)}
                 currentUserId={currentUserId}
               />
             ))
@@ -537,6 +594,26 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ currentUserId }) => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Edit Post Modal */}
+      {selectedPost && (
+        <EditPostModal
+          post={selectedPost}
+          open={editModalOpen}
+          onClose={handleCloseEditModal}
+          onPostUpdated={handlePostUpdated}
+        />
+      )}
+
+      {/* Delete Post Modal */}
+      {selectedPost && (
+        <DeletePostModal
+          post={selectedPost}
+          open={deleteModalOpen}
+          onClose={handleCloseDeleteModal}
+          onPostDeleted={handlePostDeleted}
+        />
+      )}
 
       <Snackbar
         open={snackbar.open}

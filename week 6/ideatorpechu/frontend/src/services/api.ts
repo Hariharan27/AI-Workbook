@@ -243,6 +243,18 @@ export const postsAPI = {
     const response: AxiosResponse<{ success: boolean; data: { posts: Post[]; pagination: any }; message: string }> = await api.get('/feed', {
       params: { page, limit }
     });
+    
+    // Debug: Log the feed response to see media data
+    console.log('Feed API Response:', {
+      postsCount: response.data.data.posts.length,
+      posts: response.data.data.posts.map(post => ({
+        id: post._id,
+        content: post.content.substring(0, 50) + '...',
+        mediaCount: post.media?.length || 0,
+        media: post.media
+      }))
+    });
+    
     return {
       posts: response.data.data.posts,
       total: response.data.data.pagination?.total || response.data.data.posts.length,
@@ -311,8 +323,37 @@ export const postsAPI = {
     return response.data.data.post;
   },
 
-  updatePost: async (postId: string, postData: Partial<Post>): Promise<Post> => {
-    const response: AxiosResponse<{ success: boolean; data: { post: Post }; message: string }> = await api.put(`/posts/${postId}`, postData);
+  updatePost: async (postId: string, postData: {
+    content: string;
+    media?: File[];
+    hashtags?: string[];
+    mentions?: string[];
+    location?: string;
+    isPublic: boolean;
+  }): Promise<Post> => {
+    const formData = new FormData();
+    formData.append('content', postData.content);
+    formData.append('isPublic', postData.isPublic ? 'true' : 'false');
+    
+    if (postData.media) {
+      postData.media.forEach(file => formData.append('media', file));
+    }
+    
+    if (postData.hashtags) {
+      postData.hashtags.forEach(hashtag => formData.append('hashtags[]', hashtag));
+    }
+    
+    if (postData.mentions) {
+      postData.mentions.forEach(mention => formData.append('mentions[]', mention));
+    }
+
+    if (postData.location) {
+      formData.append('location', postData.location);
+    }
+
+    const response: AxiosResponse<{ success: boolean; data: { post: Post }; message: string }> = await api.put(`/posts/${postId}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
     return response.data.data.post;
   },
 
@@ -337,7 +378,7 @@ export const postsAPI = {
 export const likesAPI = {
   // Primary method - use this for all like/unlike operations
   togglePostLike: async (postId: string): Promise<{ isLiked: boolean; likesCount: number; message: string }> => {
-    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean; likesCount: number }; message: string }> = await api.post(`/likes/${postId}/toggle`, { type: 'post' });
+    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean; likesCount: number }; message: string }> = await api.post(`/post-likes/${postId}/toggle`);
     return { 
       isLiked: response.data.data.isLiked,
       likesCount: response.data.data.likesCount,
@@ -346,7 +387,7 @@ export const likesAPI = {
   },
 
   toggleCommentLike: async (commentId: string): Promise<{ isLiked: boolean; likesCount: number; message: string }> => {
-    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean; likesCount: number }; message: string }> = await api.post(`/likes/${commentId}/toggle`, { type: 'comment' });
+    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean; likesCount: number }; message: string }> = await api.post(`/comment-likes/${commentId}/toggle`);
     return { 
       isLiked: response.data.data.isLiked,
       likesCount: response.data.data.likesCount,
@@ -356,23 +397,19 @@ export const likesAPI = {
 
   // Check like status
   checkPostLike: async (postId: string): Promise<{ isLiked: boolean }> => {
-    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean } }> = await api.get(`/likes/check/${postId}`, {
-      params: { type: 'post' }
-    });
+    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean } }> = await api.get(`/post-likes/check/${postId}`);
     return { isLiked: response.data.data.isLiked };
   },
 
   checkCommentLike: async (commentId: string): Promise<{ isLiked: boolean }> => {
-    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean } }> = await api.get(`/likes/check/${commentId}`, {
-      params: { type: 'comment' }
-    });
+    const response: AxiosResponse<{ success: boolean; data: { isLiked: boolean } }> = await api.get(`/comment-likes/check/${commentId}`);
     return { isLiked: response.data.data.isLiked };
   },
 
   // Get likes list
   getPostLikes: async (postId: string, page = 1, limit = 20): Promise<{ users: User[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ success: boolean; data: { likes: any[]; pagination: any }; message: string }> = await api.get(`/likes/${postId}`, {
-      params: { type: 'post', page, limit }
+    const response: AxiosResponse<{ success: boolean; data: { likes: any[]; pagination: any }; message: string }> = await api.get(`/post-likes/${postId}`, {
+      params: { page, limit }
     });
     return {
       users: response.data.data.likes.map((like: any) => like.user),
@@ -382,8 +419,8 @@ export const likesAPI = {
   },
 
   getCommentLikes: async (commentId: string, page = 1, limit = 20): Promise<{ users: User[]; total: number; hasMore: boolean }> => {
-    const response: AxiosResponse<{ success: boolean; data: { likes: any[]; pagination: any }; message: string }> = await api.get(`/likes/${commentId}`, {
-      params: { type: 'comment', page, limit }
+    const response: AxiosResponse<{ success: boolean; data: { likes: any[]; pagination: any }; message: string }> = await api.get(`/comment-likes/${commentId}`, {
+      params: { page, limit }
     });
     return {
       users: response.data.data.likes.map((like: any) => like.user),
@@ -640,7 +677,7 @@ export interface Notification {
   _id: string;
   recipient: string;
   sender: User;
-  type: 'like' | 'comment' | 'follow' | 'mention' | 'share' | 'reply';
+  type: 'like' | 'comment' | 'follow' | 'unfollow' | 'mention' | 'share' | 'reply' | 'message' | 'new_post';
   post?: {
     _id: string;
     content: string;

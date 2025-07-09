@@ -105,7 +105,7 @@ class MessagesAPI {
     includeArchived?: boolean;
   }): Promise<{ conversations: Conversation[] }> {
     const response = await api.get('/messages/conversations', { params });
-    return response.data;
+    return response.data.data; // Extract the nested data object
   }
 
   // Create or get direct conversation
@@ -113,13 +113,13 @@ class MessagesAPI {
     const response = await api.post('/messages/conversations/direct', {
       participantId
     });
-    return response.data;
+    return response.data.data; // Extract the nested data object
   }
 
   // Create group conversation
   async createGroupConversation(data: CreateConversationData): Promise<{ conversation: Conversation }> {
     const response = await api.post('/messages/conversations/group', data);
-    return response.data;
+    return response.data.data; // Extract the nested data object
   }
 
   // Get conversation with messages
@@ -131,7 +131,7 @@ class MessagesAPI {
     }
   ): Promise<{ conversation: ConversationWithMessages }> {
     const response = await api.get(`/messages/conversations/${conversationId}`, { params });
-    return response.data;
+    return response.data.data; // Extract the nested data object
   }
 
   // Send message
@@ -140,7 +140,7 @@ class MessagesAPI {
     data: CreateMessageData
   ): Promise<{ message: Message }> {
     const response = await api.post(`/messages/conversations/${conversationId}/messages`, data);
-    return response.data;
+    return response.data.data; // Extract the nested data object
   }
 
   // Mark messages as read
@@ -150,9 +150,62 @@ class MessagesAPI {
     });
   }
 
+  // Add message reaction
+  async addMessageReaction(messageId: string, reaction: string): Promise<void> {
+    await api.post(`/messages/${messageId}/reactions`, { reaction });
+  }
+
+  // Remove message reaction
+  async removeMessageReaction(messageId: string): Promise<void> {
+    await api.delete(`/messages/${messageId}/reactions`);
+  }
+
+  // Edit message
+  async editMessage(messageId: string, content: string): Promise<{ message: Message }> {
+    const response = await api.put(`/messages/${messageId}`, { content });
+    return response.data;
+  }
+
   // Delete message
-  async deleteMessage(messageId: string): Promise<void> {
-    await api.delete(`/messages/${messageId}`);
+  async deleteMessage(messageId: string, deleteForEveryone: boolean = false): Promise<void> {
+    await api.delete(`/messages/${messageId}`, { data: { deleteForEveryone } });
+  }
+
+  // Forward message
+  async forwardMessage(messageId: string, conversationIds: string[]): Promise<{ forwardedMessages: Message[] }> {
+    const response = await api.post(`/messages/${messageId}/forward`, { conversationIds });
+    return response.data;
+  }
+
+  // Search messages
+  async searchMessages(query: string, options?: {
+    conversationId?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ messages: Message[] }> {
+    const params = new URLSearchParams({ q: query });
+    if (options?.conversationId) params.append('conversationId', options.conversationId);
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    
+    const response = await api.get(`/messages/search?${params}`);
+    return response.data;
+  }
+
+  // Pin message
+  async pinMessage(conversationId: string, messageId: string): Promise<void> {
+    await api.post(`/conversations/${conversationId}/pin/${messageId}`);
+  }
+
+  // Unpin message
+  async unpinMessage(conversationId: string, messageId: string): Promise<void> {
+    await api.delete(`/conversations/${conversationId}/pin/${messageId}`);
+  }
+
+  // Toggle conversation settings
+  async toggleConversationSettings(conversationId: string, action: 'mute' | 'pin' | 'archive'): Promise<{ conversation: Conversation }> {
+    const response = await api.put(`/conversations/${conversationId}/settings`, { action });
+    return response.data;
   }
 
   // Toggle conversation mute
